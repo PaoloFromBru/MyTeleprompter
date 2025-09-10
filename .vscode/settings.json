@@ -1,0 +1,49 @@
+{
+  // --- Editor ---
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "always",
+    "source.fixAll.eslint": "always"
+  },
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  // --- TypeScript/JS ---
+  "typescript.tsserver.log": "off",
+  "typescript.preferences.importModuleSpecifier": "shortest",
+
+  // --- ESLint ---
+  "eslint.useFlatConfig": true,
+  "eslint.alwaysShowStatus": true,
+
+  // --- Tailwind ---
+  "tailwindCSS.includeLanguages": {
+    "typescriptreact": "html",
+    "javascriptreact": "html"
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["clsx\\(([^)]*)\\)", "[\"'`]([^\"'`]*)[\"'`]"]
+  ],
+
+  // --- CodeGPT (Codex/ChatGPT in VS Code) ---
+  // Metti la tua chiave SOLO nelle impostazioni UTENTE (Cmd+, -> apri icona file JSON)
+  // e togli da qui se committi su Git.
+  "codegpt.openaiApiKey": "YOUR_API_KEY_HERE",
+  "codegpt.provider": "openai",
+  "codegpt.model": "gpt-4o-mini", // cambia se preferisci un altro modello
+  "codegpt.locale": "it",
+
+  // --- Qualità di vita ---
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "search.exclude": {
+    ".next": true,
+    "node_modules": true
+  },
+  "files.exclude": {
+    ".next": true
+  },
+  "CodeGPT.apiKey": "OpenAI"
+}

@@ -20,6 +20,16 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Teleprompter
+
+- Route: open `http://localhost:3000/teleprompter`.
+- Allow microphone access in your browser when prompted.
+- The teleprompter scroll speed adapts to your speaking rate (estimated via Web Audio). If you pause, scrolling holds; if you speed up, it scrolls faster. You can also load a `.txt/.md/.rtf/.srt` file.
+
+Notes:
+- Most browsers require HTTPS or `localhost` for microphone access. Use Chrome, Edge, or Safari on recent versions.
+- Microphone tracks are stopped when you hit Stop or leave the page.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
