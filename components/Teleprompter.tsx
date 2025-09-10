@@ -32,7 +32,12 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     };
     const id = setTimeout(calc, 50);
     window.addEventListener("resize", calc);
-    return () => { clearTimeout(id); window.removeEventListener("resize", calc); };
+    window.addEventListener("orientationchange", calc as any);
+    return () => {
+      clearTimeout(id);
+      window.removeEventListener("resize", calc);
+      window.removeEventListener("orientationchange", calc as any);
+    };
   }, [text, totalWords]);
 
   const wordsReadRef = useRef(0);
@@ -51,6 +56,15 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     integratorRef.current = 0;
     if (containerRef.current) containerRef.current.scrollTop = 0;
   };
+
+  // Re-anchor when geometry changes: keep current scroll aligned to anchor
+  useEffect(() => {
+    const cont = containerRef.current, content = contentRef.current;
+    if (!cont || !content) return;
+    const targetWords = (cont.scrollTop + cont.clientHeight * ANCHOR_RATIO) / Math.max(1, pxPerWord);
+    wordsReadRef.current = Math.max(0, Math.min(totalWords, targetWords));
+    integratorRef.current = 0; // avoid windup after jumps
+  }, [pxPerWord, totalWords]);
 
   useEffect(() => {
     let raf: number;
@@ -100,8 +114,37 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           )}
           <button onClick={reset} className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-sm text-white">⟲ Reset</button>
         </div>
-        <div className="text-xs tabular-nums">
-          WPM: <b>{Math.round(wpm)}</b> • {talking ? "parlando" : "pausa"} • px/word: {pxPerWord.toFixed(1)}
+        <div className="flex items-center gap-2 text-xs tabular-nums">
+          <span>WPM: <b>{Math.round(wpm)}</b> • {talking ? "parlando" : "pausa"} • px/word: {pxPerWord.toFixed(1)}</span>
+          <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                const cont = containerRef.current;
+                const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
+                wordsReadRef.current = Math.max(0, wordsReadRef.current - deltaWords);
+                integratorRef.current = 0;
+              }}
+              className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+              title="Sposta indietro"
+              type="button"
+            >
+              ⬆︎
+            </button>
+            <button
+              onClick={() => {
+                const cont = containerRef.current;
+                const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
+                wordsReadRef.current = Math.min(totalWords, wordsReadRef.current + deltaWords);
+                integratorRef.current = 0;
+              }}
+              className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+              title="Sposta avanti"
+              type="button"
+            >
+              ⬇︎
+            </button>
+          </div>
         </div>
       </div>
 
