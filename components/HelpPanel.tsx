@@ -10,12 +10,13 @@ export default function HelpPanel({ lang }: { lang?: string }) {
   useEffect(() => {
     try {
       const secure = location.protocol === "https:" || ["localhost", "127.0.0.1"].includes(location.hostname);
-      const n: any = navigator;
+      const nav = typeof navigator !== "undefined" ? navigator : undefined;
       const mic = !!(
-        (n && n.mediaDevices && n.mediaDevices.getUserMedia) ||
-        n?.webkitGetUserMedia || n?.mozGetUserMedia || n?.getUserMedia
+        (nav && nav.mediaDevices && nav.mediaDevices.getUserMedia) ||
+        (nav ? ("webkitGetUserMedia" in nav || "mozGetUserMedia" in nav || "getUserMedia" in nav) : false)
       );
-      const asr = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
+      const w = typeof window !== "undefined" ? window : undefined;
+      const asr = !!(w && ("SpeechRecognition" in w || "webkitSpeechRecognition" in w));
       setEnv({ secure, mic, asr });
     } catch {
       setEnv({ secure: false, mic: false, asr: false });

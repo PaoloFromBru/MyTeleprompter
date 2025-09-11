@@ -41,11 +41,14 @@ export function useMicSpeechRate(opts?: {
   const start = useCallback(async () => {
     if (listening) return;
     try {
-      const anyNav: any = typeof navigator !== "undefined" ? navigator : undefined;
-      const getUserMedia: (c: MediaStreamConstraints) => Promise<MediaStream> | null = (() => {
-        if (anyNav?.mediaDevices?.getUserMedia) return (c: MediaStreamConstraints) => anyNav.mediaDevices.getUserMedia(c);
-        const legacy = anyNav?.webkitGetUserMedia || anyNav?.mozGetUserMedia || anyNav?.getUserMedia;
-        if (legacy) return (c: MediaStreamConstraints) => new Promise((res, rej) => legacy.call(anyNav, c, res, rej));
+      const nav = (typeof navigator !== "undefined" ? navigator : undefined);
+      type LegacyGUM = (constraints: MediaStreamConstraints, success: (stream: MediaStream) => void, error: (err: unknown) => void) => void;
+      const getUserMedia: ((c: MediaStreamConstraints) => Promise<MediaStream>) | null = (() => {
+        if (nav?.mediaDevices?.getUserMedia) return (c: MediaStreamConstraints) => nav.mediaDevices.getUserMedia(c);
+        const legacy = nav as unknown as { webkitGetUserMedia?: LegacyGUM; mozGetUserMedia?: LegacyGUM; getUserMedia?: LegacyGUM };
+        if (legacy?.webkitGetUserMedia) return (c: MediaStreamConstraints) => new Promise((res, rej) => legacy.webkitGetUserMedia!(c, res, rej));
+        if (legacy?.mozGetUserMedia) return (c: MediaStreamConstraints) => new Promise((res, rej) => legacy.mozGetUserMedia!(c, res, rej));
+        if (legacy?.getUserMedia) return (c: MediaStreamConstraints) => new Promise((res, rej) => legacy.getUserMedia!(c, res, rej));
         return null;
       })();
       if (!getUserMedia) {
@@ -59,7 +62,10 @@ export function useMicSpeechRate(opts?: {
       setPermission("granted");
       mediaStreamRef.current = stream;
 
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      type WebkitAudioContextCtor = new () => AudioContext;
+      const w = window as unknown as { webkitAudioContext?: WebkitAudioContextCtor };
+      const AudioCtor: new () => AudioContext = (window.AudioContext || (w.webkitAudioContext as unknown as new () => AudioContext));
+      const audioCtx = new AudioCtor();
       audioCtxRef.current = audioCtx;
 
       const src = audioCtx.createMediaStreamSource(stream);
@@ -79,7 +85,7 @@ export function useMicSpeechRate(opts?: {
       bandpass.connect(analyser);
 
       const timeData = new Float32Array(analyser.fftSize);
-      let lastNow = performance.now();
+      // let lastNow = performance.now(); // not used currently
 
       const loop = () => {
         if (!analyserRef.current) return;
@@ -94,8 +100,6 @@ export function useMicSpeechRate(opts?: {
         noiseFloorRef.current = 0.98 * noiseFloorRef.current + 0.02 * db;
 
         const now = performance.now();
-        const dt = (now - lastNow) / 1000;
-        lastNow = now;
 
         const isTalking = db > Math.max(minDbThreshold, noiseFloorRef.current + 6);
         talkingRef.current = isTalking;

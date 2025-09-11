@@ -21,7 +21,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const ANCHOR_RATIO = 0.35; // keep target ~35% from top
   const ui = messages[normalizeUILang(lang)];
   const [asrEnabled, setAsrEnabled] = useState(false);
-  const { supported: asrSupported, listening: asrListening, matchedIndex, matchCount, lastMatchAt, coverage, lastError: asrError, restartCount, lastTranscript } = useSpeechSync({
+  const { supported: asrSupported, matchedIndex, matchCount, lastMatchAt, coverage, lastError: asrError, restartCount, lastTranscript } = useSpeechSync({
     text,
     lang: lang || "it-IT",
     enabled: asrEnabled,
@@ -99,9 +99,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => {
     setIsClient(true);
     try {
-      const n: any = navigator as any;
+      const nav = typeof navigator !== "undefined" ? navigator : undefined;
       const supported = !!(
-        n && ((n.mediaDevices && n.mediaDevices.getUserMedia) || n.webkitGetUserMedia || n.mozGetUserMedia || n.getUserMedia)
+        nav && ((nav.mediaDevices && nav.mediaDevices.getUserMedia) ||
+        ("webkitGetUserMedia" in nav) || ("mozGetUserMedia" in nav) || ("getUserMedia" in nav))
       );
       setMicSupported(supported);
     } catch {
@@ -109,12 +110,12 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     }
   }, []);
 
-  const nudgeByViewport = (sign: 1 | -1) => {
+  const nudgeByViewport = useCallback((sign: 1 | -1) => {
     const cont = containerRef.current;
     const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
     wordsReadRef.current = Math.max(0, Math.min(totalWords, wordsReadRef.current + sign * deltaWords));
     integratorRef.current = 0;
-  };
+  }, [pxPerWord, totalWords]);
 
   // Re-anchor when geometry changes: keep current scroll aligned to anchor
   useEffect(() => {
@@ -173,7 +174,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
@@ -188,7 +189,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
         if (permission !== "granted") start();
-        else (listening ? stop() : start());
+        else {
+          if (listening) stop(); else start();
+        }
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         nudgeByViewport(-1);
@@ -208,7 +211,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [listening, permission, start, stop, pxPerWord, totalWords]);
+  }, [listening, permission, start, stop, pxPerWord, totalWords, nudgeByViewport]);
 
   return (
     <div className="w-full mx-auto max-w-3xl">

@@ -17,10 +17,10 @@ interface ISpeechRecognition extends EventTarget {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
-  onspeechstart: ((this: ISpeechRecognition, ev: Event) => any) | null;
-  onresult: ((this: ISpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-  onerror: ((this: ISpeechRecognition, ev: Event) => any) | null;
-  onend: ((this: ISpeechRecognition, ev: Event) => any) | null;
+  onspeechstart: ((this: ISpeechRecognition, ev: Event) => void) | null;
+  onresult: ((this: ISpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+  onerror: ((this: ISpeechRecognition, ev: Event) => void) | null;
+  onend: ((this: ISpeechRecognition, ev: Event) => void) | null;
   start(): void;
   stop(): void;
 }
@@ -131,11 +131,11 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
       }
     };
 
-    rec.onerror = (ev: any) => {
+    rec.onerror = (ev: unknown) => {
       try {
-        const err = ev?.error || ev?.message || String(ev?.type || "error");
+        const e = ev as { error?: string; message?: string; type?: string } | undefined;
+        const err = e?.error || e?.message || String(e?.type || "error");
         setLastError(err);
-        // eslint-disable-next-line no-console
         console.warn("ASR error:", err);
       } catch {}
       // Swallow errors; try to restart once the engine ends
