@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMicSpeechRate } from "@/hooks/useMicSpeechRate";
 import { useSpeechSync } from "@/hooks/useSpeechSync";
 
