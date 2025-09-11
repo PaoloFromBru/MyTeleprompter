@@ -27,6 +27,9 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 - The teleprompter scroll speed adapts to your speaking rate (estimated via Web Audio). If you pause, scrolling holds; if you speed up, it scrolls faster. You can also load a `.txt/.md/.rtf/.srt` file.
 - `http://localhost:3000/teleprompter` redirects to the root for convenience.
 
+Optional speech-follow (ASR)
+- Toggle the “ASR” button to let the app listen and align the text to recognized words in real time. This uses the browser’s Web Speech API (best supported on Chrome-based browsers). If unsupported, the button is disabled.
+
 Notes:
 - Most browsers require HTTPS or `localhost` for microphone access. Use Chrome, Edge, or Safari on recent versions.
 - Microphone tracks are stopped when you hit Stop or leave the page.

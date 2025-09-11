@@ -1,18 +1,30 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMicSpeechRate } from "@/hooks/useMicSpeechRate";
+import { useSpeechSync } from "@/hooks/useSpeechSync";
 
 type Props = {
   text: string;
   baseWpm?: number;
   holdOnSilence?: boolean;
+  lang?: string;
 };
 
-export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true }: Props) {
+import { messages, normalizeUILang } from "@/lib/i18n";
+
+export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang }: Props) {
   const { start, stop, listening, permission, wpm, talking } = useMicSpeechRate({
     smoothingSecs: 1.6, minDbThreshold: -52, ema: 0.25,
   });
   const ANCHOR_RATIO = 0.35; // keep target ~35% from top
+  const ui = messages[normalizeUILang(lang)];
+  const [asrEnabled, setAsrEnabled] = useState(false);
+  const { supported: asrSupported, listening: asrListening, matchedIndex } = useSpeechSync({
+    text,
+    lang: lang || "it-IT",
+    enabled: asrEnabled,
+    windowRadius: 500,
+  });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
@@ -31,12 +43,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       setPxPerWord(Math.max(1, usable / Math.max(1, totalWords)));
     };
     const id = setTimeout(calc, 50);
+    // On mobile, orientation changes trigger a resize; listening to resize is enough
     window.addEventListener("resize", calc);
-    window.addEventListener("orientationchange", calc as any);
     return () => {
       clearTimeout(id);
       window.removeEventListener("resize", calc);
-      window.removeEventListener("orientationchange", calc as any);
     };
   }, [text, totalWords]);
 
@@ -50,6 +61,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const talkingRef = useRef(talking);
   useEffect(() => { wpmRef.current = wpm; }, [wpm]);
   useEffect(() => { talkingRef.current = talking; }, [talking]);
+  const speechIdxRef = useRef<number | null>(null);
+  useEffect(() => { if (matchedIndex != null) speechIdxRef.current = matchedIndex; }, [matchedIndex]);
 
   const reset = () => {
     wordsReadRef.current = 0;
@@ -80,6 +93,15 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
+      // If ASR match is ahead, snap forward (never backwards)
+      if (speechIdxRef.current != null) {
+        const targetIdx = Math.min(totalWords, speechIdxRef.current + 1);
+        if (targetIdx > wordsReadRef.current + 2) {
+          wordsReadRef.current = targetIdx;
+          integratorRef.current = 0;
+        }
+      }
+
       const cont = containerRef.current, content = contentRef.current;
       if (cont && content) {
         const target = Math.max(0,
@@ -105,17 +127,17 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div className="flex items-center gap-2">
           {permission !== "granted" ? (
             <button onClick={start} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-sm text-white">
-              🎤 Attiva microfono
+              🎤 {ui.micEnable}
             </button>
           ) : (
             <button onClick={listening ? stop : start} className="px-3 py-1 rounded bg-sky-600 hover:bg-sky-500 text-sm text-white">
-              {listening ? "⏹ Stop" : "▶️ Start"}
+              {listening ? `⏹ ${ui.stop}` : `▶️ ${ui.start}`}
             </button>
           )}
-          <button onClick={reset} className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-sm text-white">⟲ Reset</button>
+          <button onClick={reset} className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-sm text-white">⟲ {ui.reset}</button>
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums">
-          <span>WPM: <b>{Math.round(wpm)}</b> • {talking ? "parlando" : "pausa"} • px/word: {pxPerWord.toFixed(1)}</span>
+          <span>WPM: <b>{Math.round(wpm)}</b> • {talking ? ui.statusSpeaking : ui.statusPaused} • {ui.pxWord}: {pxPerWord.toFixed(1)}</span>
           <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
           <div className="flex items-center gap-1">
             <button
@@ -126,7 +148,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 integratorRef.current = 0;
               }}
               className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
-              title="Sposta indietro"
+              title={ui.nudgeBackTitle}
               type="button"
             >
               ⬆︎
@@ -139,10 +161,20 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 integratorRef.current = 0;
               }}
               className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
-              title="Sposta avanti"
+              title={ui.nudgeForwardTitle}
               type="button"
             >
               ⬇︎
+            </button>
+            <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
+            <button
+              onClick={() => setAsrEnabled((v) => !v)}
+              className={`px-2 py-0.5 rounded text-white ${asrEnabled ? "bg-emerald-600 hover:bg-emerald-500" : "bg-neutral-600 hover:bg-neutral-500"}`}
+              title={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
+              type="button"
+              disabled={!asrSupported}
+            >
+              {asrEnabled ? ui.asrOnLabel : ui.asrOffLabel}
             </button>
           </div>
         </div>

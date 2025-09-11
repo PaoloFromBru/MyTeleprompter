@@ -1,7 +1,9 @@
 "use client";
 import { useRef } from "react";
+import { messages, normalizeUILang } from "@/lib/i18n";
 
-export default function FileTextInput({ onLoadText }: { onLoadText: (text: string) => void; }) {
+export default function FileTextInput({ onLoadText, lang }: { onLoadText: (text: string) => void; lang?: string; }) {
+  const ui = messages[normalizeUILang(lang)];
   const fileRef = useRef<HTMLInputElement | null>(null);
   const handleFile = async (file: File) => onLoadText(await file.text());
   return (
@@ -21,7 +23,7 @@ export default function FileTextInput({ onLoadText }: { onLoadText: (text: strin
         onClick={() => fileRef.current?.click()}
         type="button"
       >
-        Carica testo…
+        {ui.fileLoadLabel}
       </button>
     </div>
   );
