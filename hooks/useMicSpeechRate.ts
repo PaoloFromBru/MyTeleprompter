@@ -41,9 +41,21 @@ export function useMicSpeechRate(opts?: {
   const start = useCallback(async () => {
     if (listening) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const anyNav: any = typeof navigator !== "undefined" ? navigator : undefined;
+      const getUserMedia: (c: MediaStreamConstraints) => Promise<MediaStream> | null = (() => {
+        if (anyNav?.mediaDevices?.getUserMedia) return (c: MediaStreamConstraints) => anyNav.mediaDevices.getUserMedia(c);
+        const legacy = anyNav?.webkitGetUserMedia || anyNav?.mozGetUserMedia || anyNav?.getUserMedia;
+        if (legacy) return (c: MediaStreamConstraints) => new Promise((res, rej) => legacy.call(anyNav, c, res, rej));
+        return null;
+      })();
+      if (!getUserMedia) {
+        setPermission("denied");
+        setListening(false);
+        return;
+      }
+      const stream = await getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-      });
+      } as MediaStreamConstraints);
       setPermission("granted");
       mediaStreamRef.current = stream;
 

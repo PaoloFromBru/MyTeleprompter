@@ -65,11 +65,17 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
   const [listening, setListening] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
   const [matchedIndex, setMatchedIndex] = useState<number | null>(null);
+  const [matchCount, setMatchCount] = useState(0);
+  const lastMatchAtRef = useRef<number>(0);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [restartCount, setRestartCount] = useState(0);
 
   const recRef = useRef<ISpeechRecognition | null>(null);
   const bufferRef = useRef<string[]>([]);
   const lastMatchRef = useRef<number>(0);
   const restartingRef = useRef(false);
+  const lastCountedIdxRef = useRef<number>(-1);
+  const hadAnyMatchRef = useRef(false);
 
   useEffect(() => {
     const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -103,23 +109,41 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
       // Try to align using the last 6..3 tokens within a window around last match
       const windowStart = lastMatchRef.current - windowRadius;
       const windowEnd = lastMatchRef.current + windowRadius;
-      for (let n = Math.min(6, bufferRef.current.length); n >= 3; n--) {
+      let matched = false;
+      for (let n = Math.min(6, bufferRef.current.length); n >= 3 && !matched; n--) {
         const seq = bufferRef.current.slice(-n);
-        const idx = findSequence(textTokens, seq, windowStart, windowEnd);
+        let idx = findSequence(textTokens, seq, windowStart, windowEnd);
+        // If we never matched yet, fall back to a global search to acquire lock anywhere
+        if (idx < 0 && !hadAnyMatchRef.current) {
+          idx = findSequence(textTokens, seq, 0, textTokens.length);
+        }
         if (idx >= 0) {
+          matched = true;
+          hadAnyMatchRef.current = true;
           lastMatchRef.current = idx;
           setMatchedIndex(idx);
-          break;
+          if (idx > lastCountedIdxRef.current) {
+            lastCountedIdxRef.current = idx;
+            lastMatchAtRef.current = Date.now();
+            setMatchCount((c) => c + 1);
+          }
         }
       }
     };
 
-    rec.onerror = () => {
+    rec.onerror = (ev: any) => {
+      try {
+        const err = ev?.error || ev?.message || String(ev?.type || "error");
+        setLastError(err);
+        // eslint-disable-next-line no-console
+        console.warn("ASR error:", err);
+      } catch {}
       // Swallow errors; try to restart once the engine ends
     };
     rec.onend = () => {
       recRef.current = null;
       setListening(false);
+      setRestartCount((c) => c + 1);
       if (enabled && !restartingRef.current) {
         restartingRef.current = true;
         setTimeout(() => { restartingRef.current = false; start(); }, 400);
@@ -146,5 +170,10 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
     return () => stop();
   }, [enabled, start, stop]);
 
-  return { supported, listening, start, stop, lastTranscript, matchedIndex };
+  const coverage = useMemo(() => {
+    if (!textTokens.length || matchedIndex == null) return 0;
+    return Math.max(0, Math.min(1, matchedIndex / textTokens.length));
+  }, [matchedIndex, textTokens.length]);
+
+  return { supported, listening, start, stop, lastTranscript, matchedIndex, matchCount, lastMatchAt: lastMatchAtRef.current, coverage, lastError, restartCount };
 }

@@ -8,18 +8,20 @@ type Props = {
   baseWpm?: number;
   holdOnSilence?: boolean;
   lang?: string;
+  fontSizePx?: number;
+  mirror?: boolean;
 };
 
 import { messages, normalizeUILang } from "@/lib/i18n";
 
-export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang }: Props) {
+export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang, fontSizePx, mirror = false }: Props) {
   const { start, stop, listening, permission, wpm, talking } = useMicSpeechRate({
     smoothingSecs: 1.6, minDbThreshold: -52, ema: 0.25,
   });
   const ANCHOR_RATIO = 0.35; // keep target ~35% from top
   const ui = messages[normalizeUILang(lang)];
   const [asrEnabled, setAsrEnabled] = useState(false);
-  const { supported: asrSupported, listening: asrListening, matchedIndex } = useSpeechSync({
+  const { supported: asrSupported, listening: asrListening, matchedIndex, matchCount, lastMatchAt, coverage, lastError: asrError, restartCount, lastTranscript } = useSpeechSync({
     text,
     lang: lang || "it-IT",
     enabled: asrEnabled,
@@ -32,7 +34,21 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const words = useMemo(() =>
     text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean), [text]
   );
+  // Tokenization similar to ASR side for mapping ASR index -> word index
+  function normalizeTokenLocal(s: string) {
+    return s
+      .toLowerCase()
+      // Remove diacritics
+      .normalize("NFD").replace(/\p{Diacritic}+/gu, "")
+      // Keep only letters/numbers
+      .replace(/[^\p{L}\p{N}]+/gu, "")
+      .trim();
+  }
+  const tokensLen = useMemo(() =>
+    text.split(/\s+/).map(normalizeTokenLocal).filter(Boolean).length
+  , [text]);
   const totalWords = words.length;
+  const tokenToWordRatio = useMemo(() => totalWords / Math.max(1, tokensLen), [totalWords, tokensLen]);
 
   const [pxPerWord, setPxPerWord] = useState(2);
   useEffect(() => {
@@ -49,7 +65,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       clearTimeout(id);
       window.removeEventListener("resize", calc);
     };
-  }, [text, totalWords]);
+  }, [text, totalWords, fontSizePx]);
 
   const wordsReadRef = useRef(0);
   const lastTsRef = useRef<number | null>(null);
@@ -63,11 +79,41 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => { talkingRef.current = talking; }, [talking]);
   const speechIdxRef = useRef<number | null>(null);
   useEffect(() => { if (matchedIndex != null) speechIdxRef.current = matchedIndex; }, [matchedIndex]);
+  const [recentAsr, setRecentAsr] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRecentAsr(!!lastMatchAt && Date.now() - lastMatchAt < 2000);
+    }, 400);
+    return () => clearInterval(id);
+  }, [lastMatchAt]);
 
   const reset = () => {
     wordsReadRef.current = 0;
     integratorRef.current = 0;
     if (containerRef.current) containerRef.current.scrollTop = 0;
+  };
+
+  // Avoid hydration mismatch: detect client and feature support after mount
+  const [isClient, setIsClient] = useState(false);
+  const [micSupported, setMicSupported] = useState<boolean | null>(null);
+  useEffect(() => {
+    setIsClient(true);
+    try {
+      const n: any = navigator as any;
+      const supported = !!(
+        n && ((n.mediaDevices && n.mediaDevices.getUserMedia) || n.webkitGetUserMedia || n.mozGetUserMedia || n.getUserMedia)
+      );
+      setMicSupported(supported);
+    } catch {
+      setMicSupported(false);
+    }
+  }, []);
+
+  const nudgeByViewport = (sign: 1 | -1) => {
+    const cont = containerRef.current;
+    const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
+    wordsReadRef.current = Math.max(0, Math.min(totalWords, wordsReadRef.current + sign * deltaWords));
+    integratorRef.current = 0;
   };
 
   // Re-anchor when geometry changes: keep current scroll aligned to anchor
@@ -93,12 +139,20 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
-      // If ASR match is ahead, snap forward (never backwards)
+      // If ASR provides a match, gently correct towards it (both directions)
       if (speechIdxRef.current != null) {
-        const targetIdx = Math.min(totalWords, speechIdxRef.current + 1);
-        if (targetIdx > wordsReadRef.current + 2) {
-          wordsReadRef.current = targetIdx;
+        const targetIdxWords = Math.min(
+          totalWords,
+          Math.round((speechIdxRef.current + 1) * tokenToWordRatio)
+        );
+        const diff = targetIdxWords - wordsReadRef.current;
+        if (Math.abs(diff) >= 3) {
+          // Large discrepancy: snap to ASR to avoid drift
+          wordsReadRef.current = targetIdxWords;
           integratorRef.current = 0;
+        } else {
+          // Small discrepancy: nudge towards ASR
+          wordsReadRef.current += diff * 0.15;
         }
       }
 
@@ -121,12 +175,52 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     return () => cancelAnimationFrame(raf);
   }, [baseWpm, pxPerWord, holdOnSilence, totalWords]);
 
+  // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
+  useEffect(() => {
+    const isTypingTarget = (el: Element | null) => {
+      if (!el) return false;
+      const tag = (el as HTMLElement).tagName;
+      const editable = (el as HTMLElement).isContentEditable;
+      return editable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(document.activeElement)) return;
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (permission !== "granted") start();
+        else (listening ? stop() : start());
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        nudgeByViewport(-1);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        nudgeByViewport(1);
+      } else if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        const cont = containerRef.current;
+        if (!cont) return;
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        } else {
+          try { cont.requestFullscreen(); } catch {}
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [listening, permission, start, stop, pxPerWord, totalWords]);
+
   return (
     <div className="w-full mx-auto max-w-3xl">
       <div className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2">
           {permission !== "granted" ? (
-            <button onClick={start} className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-sm text-white">
+            <button
+              onClick={start}
+              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isClient ? micSupported === false : undefined}
+              title={isClient && micSupported === false ? "Microphone API not supported" : undefined}
+            >
               🎤 {ui.micEnable}
             </button>
           ) : (
@@ -141,12 +235,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
           <div className="flex items-center gap-1">
             <button
-              onClick={() => {
-                const cont = containerRef.current;
-                const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
-                wordsReadRef.current = Math.max(0, wordsReadRef.current - deltaWords);
-                integratorRef.current = 0;
-              }}
+              onClick={() => nudgeByViewport(-1)}
               className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
               title={ui.nudgeBackTitle}
               type="button"
@@ -154,12 +243,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               ⬆︎
             </button>
             <button
-              onClick={() => {
-                const cont = containerRef.current;
-                const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
-                wordsReadRef.current = Math.min(totalWords, wordsReadRef.current + deltaWords);
-                integratorRef.current = 0;
-              }}
+              onClick={() => nudgeByViewport(1)}
               className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
               title={ui.nudgeForwardTitle}
               type="button"
@@ -176,18 +260,38 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             >
               {asrEnabled ? ui.asrOnLabel : ui.asrOffLabel}
             </button>
+            {asrEnabled && (
+              <span className="inline-flex items-center gap-1 ml-1">
+                <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
+              </span>
+            )}
+            {/* ASR diagnostics */}
+            {asrEnabled && (
+              <span className="ml-1 opacity-90">
+                {ui.asrMatchesLabel}: {matchCount} • {ui.asrCoverageLabel}: {(coverage * 100).toFixed(0)}% • restarts: {restartCount}{asrError ? ` • err: ${asrError}` : ""}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      <div
-        ref={containerRef}
-        className="relative h-[78vh] border rounded-lg overflow-y-hidden bg-black text-white px-10 py-16 leading-relaxed tracking-wide"
-        style={{ scrollBehavior: "auto" }}
-      >
-        {/* Reading anchor guide */}
+      <div className="relative">
         <div
-          className="pointer-events-none absolute inset-x-0"
+          ref={containerRef}
+          className="h-[78vh] border rounded-lg overflow-y-hidden bg-black text-white px-10 py-16 leading-relaxed tracking-wide"
+          style={{ scrollBehavior: "auto" }}
+        >
+        <div
+          ref={contentRef}
+          className="text-2xl md:text-3xl whitespace-pre-wrap select-none"
+          style={{ fontSize: fontSizePx, transform: mirror ? "scaleX(-1)" : undefined }}
+        >
+          {text}
+        </div>
+        </div>
+        {/* Reading anchor guide (fixed over scroller) */}
+        <div
+          className="pointer-events-none absolute inset-x-0 z-10"
           style={{ top: `${ANCHOR_RATIO * 100}%` }}
         >
           <div className="relative">
@@ -199,10 +303,13 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             <div className="h-0.5 bg-emerald-400/80 shadow-[0_0_12px_rgba(16,185,129,0.6)]" />
           </div>
         </div>
-        <div ref={contentRef} className="text-2xl md:text-3xl whitespace-pre-wrap select-none">
-          {text}
-        </div>
       </div>
+      {asrEnabled && (
+        <div className="mt-2 text-xs opacity-80">
+          <div className="font-medium">ASR transcript (last):</div>
+          <div className="truncate" title={lastTranscript}>{lastTranscript || "(no audio recognized yet)"}</div>
+        </div>
+      )}
     </div>
   );
 }
