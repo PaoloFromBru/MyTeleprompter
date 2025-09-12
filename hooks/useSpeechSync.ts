@@ -176,6 +176,17 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
     setListening(false);
   }, []);
 
+  const reset = useCallback(() => {
+    bufferRef.current = [];
+    lastMatchRef.current = 0;
+    lastCountedIdxRef.current = -1;
+    hadAnyMatchRef.current = false;
+    setMatchedIndex(null);
+    setMatchCount(0);
+    setLastTranscript("");
+    setLastError(null);
+  }, []);
+
   useEffect(() => {
     if (!enabled) { stop(); return; }
     start();
@@ -187,5 +198,5 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
     return Math.max(0, Math.min(1, matchedIndex / textTokens.length));
   }, [matchedIndex, textTokens.length]);
 
-  return { supported, listening, start, stop, lastTranscript, matchedIndex, matchCount, lastMatchAt: lastMatchAtRef.current, coverage, lastError, restartCount };
+  return { supported, listening, start, stop, reset, lastTranscript, matchedIndex, matchCount, lastMatchAt: lastMatchAtRef.current, coverage, lastError, restartCount };
 }

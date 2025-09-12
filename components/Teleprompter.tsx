@@ -24,7 +24,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [asrWindowScreens, setAsrWindowScreens] = useState<1 | 2 | 4>(1);
   const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive">("aggressive");
   const [showMobileSettings, setShowMobileSettings] = useState(false);
-  const { supported: asrSupported, matchedIndex, matchCount, lastMatchAt, coverage, lastError: asrError, restartCount, lastTranscript } = useSpeechSync({
+  const { supported: asrSupported, matchedIndex, lastMatchAt, lastTranscript, reset: resetASR } = useSpeechSync({
     text,
     lang: lang || "it-IT",
     enabled: asrEnabled,
@@ -72,7 +72,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
   const wordsReadRef = useRef(0);
   const lastTsRef = useRef<number | null>(null);
-  const Kp = 0.22, Ki = 0.08;
   const integratorRef = useRef(0);
 
   // Mirror hook values into refs for the rAF loop (avoid effect deps churn)
@@ -98,7 +97,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     if (matchedIndex >= Math.max(currentTok, minTok) && matchedIndex <= maxTok) {
       speechIdxRef.current = matchedIndex;
     }
-  }, [matchedIndex, pxPerWord, asrWindowScreens]);
+  }, [matchedIndex, pxPerWord, asrWindowScreens, tokenToWordRatio, totalWords]);
   // On Android Chrome, ASR and WebAudio may contend for the mic.
   // If ASR is enabled while mic listening, stop the mic to avoid conflicts.
   useEffect(() => {
@@ -116,6 +115,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     wordsReadRef.current = 0;
     integratorRef.current = 0;
     if (containerRef.current) containerRef.current.scrollTop = 0;
+    try { resetASR(); } catch {}
   };
 
   // Avoid hydration mismatch: detect client and feature support after mount
@@ -198,16 +198,15 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             wordsReadRef.current * pxPerWord - cont.clientHeight * ANCHOR_RATIO
           )
         );
-        const error = target - cont.scrollTop;
-        integratorRef.current += error * dt;
-        const speed = Kp * error + Ki * integratorRef.current;
-        cont.scrollTop = cont.scrollTop + speed * dt;
+        // Follow target quickly with easing to avoid lag and oscillation
+        const alpha = Math.min(1, dt * 10); // ~100ms time constant
+        cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
