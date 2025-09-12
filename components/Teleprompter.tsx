@@ -24,13 +24,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [asrWindowScreens, setAsrWindowScreens] = useState<1 | 2 | 4>(1);
   const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive">("aggressive");
   const [showMobileSettings, setShowMobileSettings] = useState(false);
-  const { supported: asrSupported, matchedIndex, lastMatchAt, lastTranscript, reset: resetASR } = useSpeechSync({
-    text,
-    lang: lang || "it-IT",
-    enabled: asrEnabled,
-    windowRadius: 500,
-  });
-
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
 
@@ -69,6 +62,24 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       window.removeEventListener("resize", calc);
     };
   }, [text, totalWords, fontSizePx]);
+
+  // Compute ASR search window based on viewport size and setting (in tokens)
+  const viewportWords = useMemo(() => {
+    const cont = containerRef.current;
+    return cont ? (cont.clientHeight / Math.max(1, pxPerWord)) : 0;
+  }, [pxPerWord]);
+  const dynamicWindowTokens = useMemo(() => {
+    if (tokenToWordRatio <= 0) return 400; // fallback
+    const tokens = Math.round((viewportWords * asrWindowScreens) / tokenToWordRatio);
+    return Math.max(80, Math.min(2000, tokens));
+  }, [viewportWords, asrWindowScreens, tokenToWordRatio]);
+
+  const { supported: asrSupported, matchedIndex, lastMatchAt, lastTranscript, reset: resetASR } = useSpeechSync({
+    text,
+    lang: lang || "it-IT",
+    enabled: asrEnabled,
+    windowRadius: dynamicWindowTokens,
+  });
 
   const wordsReadRef = useRef(0);
   const lastTsRef = useRef<number | null>(null);
