@@ -79,6 +79,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => { talkingRef.current = talking; }, [talking]);
   const speechIdxRef = useRef<number | null>(null);
   useEffect(() => { if (matchedIndex != null) speechIdxRef.current = matchedIndex; }, [matchedIndex]);
+  // On Android Chrome, ASR and WebAudio may contend for the mic.
+  // If ASR is enabled while mic listening, stop the mic to avoid conflicts.
+  useEffect(() => {
+    if (asrEnabled && listening) stop();
+  }, [asrEnabled, listening, stop]);
   const [recentAsr, setRecentAsr] = useState(false);
   useEffect(() => {
     const id = setInterval(() => {
@@ -140,20 +145,22 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
-      // If ASR provides a match, gently correct towards it (both directions)
+      // If ASR provides a match ahead, snap to anchor (forward only)
       if (speechIdxRef.current != null) {
-        const targetIdxWords = Math.min(
-          totalWords,
-          Math.round((speechIdxRef.current + 1) * tokenToWordRatio)
-        );
-        const diff = targetIdxWords - wordsReadRef.current;
-        if (Math.abs(diff) >= 1) {
-          // Large discrepancy: snap to ASR to avoid drift
+        const targetIdxWords = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
+        if (targetIdxWords > wordsReadRef.current + 0.5) {
           wordsReadRef.current = targetIdxWords;
           integratorRef.current = 0;
-        } else {
-          // Small discrepancy: nudge towards ASR
-          wordsReadRef.current += diff * 0.4;
+          const cont = containerRef.current, content = contentRef.current;
+          if (cont && content) {
+            const target = Math.max(0,
+              Math.min(
+                content.scrollHeight - cont.clientHeight,
+                wordsReadRef.current * pxPerWord - cont.clientHeight * ANCHOR_RATIO
+              )
+            );
+            cont.scrollTop = target;
+          }
         }
       }
 

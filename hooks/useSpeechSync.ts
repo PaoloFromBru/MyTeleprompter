@@ -46,6 +46,27 @@ function findSequence(tokens: string[], seq: string[], start: number, end: numbe
   return -1;
 }
 
+function findFuzzySequence(tokens: string[], seq: string[], start: number, end: number, minRatio: number) {
+  const n = tokens.length, m = seq.length;
+  if (m === 0) return -1;
+  const lo = Math.max(0, start);
+  const hi = Math.min(n - m, end - m);
+  let bestIdx = -1;
+  let bestRatio = 0;
+  for (let i = lo; i <= hi; i++) {
+    let matches = 0;
+    for (let j = 0; j < m; j++) {
+      if (tokens[i + j] === seq[j]) matches++;
+    }
+    const ratio = matches / m;
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      bestIdx = i + m - 1;
+    }
+  }
+  return bestRatio >= minRatio ? bestIdx : -1;
+}
+
 export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boolean; windowRadius?: number; }) {
   const { text, lang = "it-IT", enabled = false, windowRadius = 400 } = opts;
   const textTokens = useMemo(() => tokenize(text), [text]);
@@ -94,16 +115,19 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
       // Keep only the most recent tokens (avoid duplication across events)
       bufferRef.current = tokens.slice(-60);
 
-      // Try to align using the last 6..3 tokens within a window around last match
+      // Try to align using the last 6..2 tokens within a window around last match
       const windowStart = lastMatchRef.current - windowRadius;
       const windowEnd = lastMatchRef.current + windowRadius;
       let matched = false;
-      for (let n = Math.min(6, bufferRef.current.length); n >= 3 && !matched; n--) {
+      for (let n = Math.min(6, bufferRef.current.length); n >= 2 && !matched; n--) {
         const seq = bufferRef.current.slice(-n);
+        // Prefer exact match; otherwise fuzzy with 0.6 similarity
         let idx = findSequence(textTokens, seq, windowStart, windowEnd);
+        if (idx < 0) idx = findFuzzySequence(textTokens, seq, windowStart, windowEnd, 0.6);
         // If we never matched yet, fall back to a global search to acquire lock anywhere
         if (idx < 0 && !hadAnyMatchRef.current) {
           idx = findSequence(textTokens, seq, 0, textTokens.length);
+          if (idx < 0) idx = findFuzzySequence(textTokens, seq, 0, textTokens.length, 0.6);
         }
         if (idx >= 0) {
           matched = true;
