@@ -147,13 +147,13 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           Math.round((speechIdxRef.current + 1) * tokenToWordRatio)
         );
         const diff = targetIdxWords - wordsReadRef.current;
-        if (Math.abs(diff) >= 3) {
+        if (Math.abs(diff) >= 1) {
           // Large discrepancy: snap to ASR to avoid drift
           wordsReadRef.current = targetIdxWords;
           integratorRef.current = 0;
         } else {
           // Small discrepancy: nudge towards ASR
-          wordsReadRef.current += diff * 0.15;
+          wordsReadRef.current += diff * 0.4;
         }
       }
 
@@ -215,8 +215,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
   return (
     <div className="w-full mx-auto max-w-3xl">
-      <div className="flex items-center justify-between mb-3 gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mb-3 gap-2 h-[44px] min-h-[44px] overflow-hidden">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           {permission !== "granted" ? (
             <button
               onClick={start}
@@ -233,10 +233,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           )}
           <button onClick={reset} className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-sm text-white">⟲ {ui.reset}</button>
         </div>
-        <div className="flex items-center gap-2 text-xs tabular-nums">
-          <span>WPM: <b>{Math.round(wpm)}</b> • {talking ? ui.statusSpeaking : ui.statusPaused} • {ui.pxWord}: {pxPerWord.toFixed(1)}</span>
+        <div className="flex items-center gap-2 text-xs tabular-nums whitespace-nowrap overflow-x-auto">
+          <span className="inline-block max-w-[60vw] truncate">WPM: <b>{Math.round(wpm)}</b> • {talking ? ui.statusSpeaking : ui.statusPaused} • {ui.pxWord}: {pxPerWord.toFixed(1)}</span>
           <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 whitespace-nowrap">
             <button
               onClick={() => nudgeByViewport(-1)}
               className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
@@ -268,15 +268,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
               </span>
             )}
-            {/* ASR diagnostics */}
-            {asrEnabled && (
-              <span className="ml-1 opacity-90">
-                {ui.asrMatchesLabel}: {matchCount} • {ui.asrCoverageLabel}: {(coverage * 100).toFixed(0)}% • restarts: {restartCount}{asrError ? ` • err: ${asrError}` : ""}
-              </span>
-            )}
-          </div>
         </div>
       </div>
+    </div>
 
       <div className="relative">
         <div

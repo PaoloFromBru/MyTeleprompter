@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { tokenize } from "@/lib/text";
 
 // Minimal typings for Web Speech API (Chrome)
 declare global {
@@ -29,20 +30,7 @@ interface SpeechRecognitionConstructor {
   new (): ISpeechRecognition;
 }
 
-function normalizeToken(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD").replace(/\p{Diacritic}+/gu, "")
-    .replace(/[^\p{L}\p{N}]+/gu, "")
-    .trim();
-}
-
-function tokenize(text: string) {
-  return text
-    .split(/\s+/)
-    .map(normalizeToken)
-    .filter(Boolean);
-}
+// tokenization helpers imported from lib/text
 
 function findSequence(tokens: string[], seq: string[], start: number, end: number) {
   const n = tokens.length, m = seq.length;
