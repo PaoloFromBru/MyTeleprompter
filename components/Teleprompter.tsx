@@ -71,7 +71,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const dynamicWindowTokens = useMemo(() => {
     if (tokenToWordRatio <= 0) return 400; // fallback
     const tokens = Math.round((viewportWords * asrWindowScreens) / tokenToWordRatio);
-    return Math.max(80, Math.min(2000, tokens));
+    // Wider bounds so portrait mobile has enough context to stay locked
+    return Math.max(150, Math.min(4000, tokens));
   }, [viewportWords, asrWindowScreens, tokenToWordRatio]);
 
   const { supported: asrSupported, matchedIndex, lastMatchAt, lastTranscript, reset: resetASR } = useSpeechSync({
@@ -91,21 +92,20 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => { wpmRef.current = wpm; }, [wpm]);
   useEffect(() => { talkingRef.current = talking; }, [talking]);
   const speechIdxRef = useRef<number | null>(null);
-  // Accept ASR matches only if they are within the allowed visible window and forward-only
+  // Accept ASR matches generously behind, but limit far-ahead jumps
   useEffect(() => {
     if (matchedIndex == null) return;
     const cont = containerRef.current;
     if (!cont) { speechIdxRef.current = matchedIndex; return; }
     const visibleWords = cont.clientHeight / Math.max(1, pxPerWord);
     const currentWords = wordsReadRef.current;
-    const above = ANCHOR_RATIO * visibleWords * asrWindowScreens;
-    const below = (1 - ANCHOR_RATIO) * visibleWords * asrWindowScreens;
-    const minWord = Math.max(0, currentWords - above);
-    const maxWord = Math.min(totalWords, currentWords + below);
     const currentTok = Math.round(currentWords / Math.max(1e-6, tokenToWordRatio));
-    const minTok = Math.floor(minWord / Math.max(1e-6, tokenToWordRatio));
-    const maxTok = Math.ceil(maxWord / Math.max(1e-6, tokenToWordRatio));
-    if (matchedIndex >= Math.max(currentTok, minTok) && matchedIndex <= maxTok) {
+    const viewportTokens = visibleWords / Math.max(1e-6, tokenToWordRatio);
+    const aheadTok = Math.ceil(viewportTokens * asrWindowScreens);
+    const behindTok = Math.ceil(viewportTokens * 3); // allow far behind so ASR can catch up
+    const minTok = Math.max(0, currentTok - behindTok);
+    const maxTok = currentTok + aheadTok;
+    if (matchedIndex >= minTok && matchedIndex <= maxTok) {
       speechIdxRef.current = matchedIndex;
     }
   }, [matchedIndex, pxPerWord, asrWindowScreens, tokenToWordRatio, totalWords]);
