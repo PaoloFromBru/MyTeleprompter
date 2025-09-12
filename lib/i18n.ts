@@ -42,6 +42,13 @@ export const messages: Record<UILang, {
   helpPrivacyNote: string;
   asrMatchesLabel: string;
   asrCoverageLabel: string;
+  asrWindowLabel: string;
+  asrWindowViewport: string;
+  asrWindowViewport2x: string;
+  asrWindowWide: string;
+  asrSnapMode: string;
+  asrSnapGentle: string;
+  asrSnapAggressive: string;
 }> = {
   en: {
     title: "Adaptive teleprompter (closed-loop)",
@@ -80,6 +87,13 @@ export const messages: Record<UILang, {
     helpTroubleshootTitle: "Troubleshooting",
     helpTroubleshootContent: "If Space does not start, ensure you are on HTTPS or localhost and grant mic permission. If ASR does not follow, try Chrome and correct language.",
     helpPrivacyNote: "Audio stays in the browser; no recording or upload.",
+    asrWindowLabel: "ASR window",
+    asrWindowViewport: "Viewport",
+    asrWindowViewport2x: "Viewport ×2",
+    asrWindowWide: "Wide",
+    asrSnapMode: "Snap",
+    asrSnapGentle: "Gentle",
+    asrSnapAggressive: "Aggressive",
   },
   it: {
     title: "Teleprompter adattivo (feedback chiuso)",
@@ -118,5 +132,12 @@ export const messages: Record<UILang, {
     helpTroubleshootTitle: "Risoluzione problemi",
     helpTroubleshootContent: "Se Space non avvia, verifica HTTPS o localhost e consenti il microfono. Se l'ASR non segue, prova Chrome e imposta la lingua corretta.",
     helpPrivacyNote: "L'audio resta nel browser; nessuna registrazione o upload.",
+    asrWindowLabel: "Finestra ASR",
+    asrWindowViewport: "Viewport",
+    asrWindowViewport2x: "Viewport ×2",
+    asrWindowWide: "Ampia",
+    asrSnapMode: "Aggancio",
+    asrSnapGentle: "Morbido",
+    asrSnapAggressive: "Aggressivo",
   },
 };

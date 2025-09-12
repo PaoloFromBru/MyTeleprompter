@@ -21,6 +21,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const ANCHOR_RATIO = 0.35; // keep target ~35% from top
   const ui = messages[normalizeUILang(lang)];
   const [asrEnabled, setAsrEnabled] = useState(false);
+  const [asrWindowScreens, setAsrWindowScreens] = useState<1 | 2 | 4>(1);
+  const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive">("aggressive");
+  const [showMobileSettings, setShowMobileSettings] = useState(false);
   const { supported: asrSupported, matchedIndex, matchCount, lastMatchAt, coverage, lastError: asrError, restartCount, lastTranscript } = useSpeechSync({
     text,
     lang: lang || "it-IT",
@@ -78,7 +81,24 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => { wpmRef.current = wpm; }, [wpm]);
   useEffect(() => { talkingRef.current = talking; }, [talking]);
   const speechIdxRef = useRef<number | null>(null);
-  useEffect(() => { if (matchedIndex != null) speechIdxRef.current = matchedIndex; }, [matchedIndex]);
+  // Accept ASR matches only if they are within the allowed visible window and forward-only
+  useEffect(() => {
+    if (matchedIndex == null) return;
+    const cont = containerRef.current;
+    if (!cont) { speechIdxRef.current = matchedIndex; return; }
+    const visibleWords = cont.clientHeight / Math.max(1, pxPerWord);
+    const currentWords = wordsReadRef.current;
+    const above = ANCHOR_RATIO * visibleWords * asrWindowScreens;
+    const below = (1 - ANCHOR_RATIO) * visibleWords * asrWindowScreens;
+    const minWord = Math.max(0, currentWords - above);
+    const maxWord = Math.min(totalWords, currentWords + below);
+    const currentTok = Math.round(currentWords / Math.max(1e-6, tokenToWordRatio));
+    const minTok = Math.floor(minWord / Math.max(1e-6, tokenToWordRatio));
+    const maxTok = Math.ceil(maxWord / Math.max(1e-6, tokenToWordRatio));
+    if (matchedIndex >= Math.max(currentTok, minTok) && matchedIndex <= maxTok) {
+      speechIdxRef.current = matchedIndex;
+    }
+  }, [matchedIndex, pxPerWord, asrWindowScreens]);
   // On Android Chrome, ASR and WebAudio may contend for the mic.
   // If ASR is enabled while mic listening, stop the mic to avoid conflicts.
   useEffect(() => {
@@ -145,21 +165,27 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
-      // If ASR provides a match ahead, snap to anchor (forward only)
+      // If ASR provides a match ahead (within window), apply correction per snap mode
       if (speechIdxRef.current != null) {
         const targetIdxWords = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
-        if (targetIdxWords > wordsReadRef.current + 0.5) {
-          wordsReadRef.current = targetIdxWords;
-          integratorRef.current = 0;
-          const cont = containerRef.current, content = contentRef.current;
-          if (cont && content) {
-            const target = Math.max(0,
-              Math.min(
-                content.scrollHeight - cont.clientHeight,
-                wordsReadRef.current * pxPerWord - cont.clientHeight * ANCHOR_RATIO
-              )
-            );
-            cont.scrollTop = target;
+        if (targetIdxWords > wordsReadRef.current + 0.25) {
+          if (asrSnapMode === "aggressive") {
+            wordsReadRef.current = targetIdxWords;
+            integratorRef.current = 0;
+            const cont2 = containerRef.current, content2 = contentRef.current;
+            if (cont2 && content2) {
+              const target = Math.max(0,
+                Math.min(
+                  content2.scrollHeight - cont2.clientHeight,
+                  wordsReadRef.current * pxPerWord - cont2.clientHeight * ANCHOR_RATIO
+                )
+              );
+              cont2.scrollTop = target;
+            }
+          } else {
+            // Gentle: move toward target gradually (forward only)
+            const diff = targetIdxWords - wordsReadRef.current;
+            wordsReadRef.current += Math.max(0, diff * 0.25);
           }
         }
       }
@@ -223,7 +249,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   return (
     <div className="w-full mx-auto max-w-3xl">
       {/* Mobile compact toolbar */}
-      <div className="flex sm:hidden items-center justify-between mb-3 gap-2 h-[44px]">
+      <div className="flex sm:hidden items-center justify-between mb-2 gap-2 h-[44px]">
         <div className="flex items-center gap-1">
           <button
             onClick={permission !== "granted" ? start : (listening ? stop : start)}
@@ -298,8 +324,49 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           {asrEnabled && (
             <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
           )}
+          <button
+            onClick={() => setShowMobileSettings((v) => !v)}
+            className="p-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white"
+            aria-label={ui.settingsTitle}
+            title={ui.settingsTitle}
+            type="button"
+          >
+            {/* gear icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.6 15a1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 3.6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8 3.6a1.65 1.65 0 0 0 1-1.51V2a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 16 3.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.4 8c.36.31.59.76.59 1.25S20.76 10.69 20.4 11a1.65 1.65 0 0 0-.33 1.82z"/>
+            </svg>
+          </button>
         </div>
       </div>
+
+      {showMobileSettings && (
+        <div className="sm:hidden mb-3 text-xs flex items-center justify-between gap-2">
+          <label className="inline-flex items-center gap-1">
+            <span>{ui.asrWindowLabel}</span>
+            <select
+              className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+              value={asrWindowScreens}
+              onChange={(e) => setAsrWindowScreens(Number(e.target.value) as 1 | 2 | 4)}
+            >
+              <option value={1}>{ui.asrWindowViewport}</option>
+              <option value={2}>{ui.asrWindowViewport2x}</option>
+              <option value={4}>{ui.asrWindowWide}</option>
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <span>{ui.asrSnapMode}</span>
+            <select
+              className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+              value={asrSnapMode}
+              onChange={(e) => setAsrSnapMode((e.target.value as "gentle" | "aggressive"))}
+            >
+              <option value="gentle">{ui.asrSnapGentle}</option>
+              <option value="aggressive">{ui.asrSnapAggressive}</option>
+            </select>
+          </label>
+        </div>
+      )}
 
       {/* Desktop toolbar */}
       <div className="hidden sm:flex items-center justify-between mb-3 gap-2 h-[44px] min-h-[44px] overflow-hidden">
@@ -355,6 +422,30 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
               </span>
             )}
+            {/* ASR window and snap mode controls (desktop) */}
+            <label className="ml-2 inline-flex items-center gap-1">
+              <span>{ui.asrWindowLabel}</span>
+              <select
+                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5"
+                value={asrWindowScreens}
+                onChange={(e) => setAsrWindowScreens(Number(e.target.value) as 1 | 2 | 4)}
+              >
+                <option value={1}>{ui.asrWindowViewport}</option>
+                <option value={2}>{ui.asrWindowViewport2x}</option>
+                <option value={4}>{ui.asrWindowWide}</option>
+              </select>
+            </label>
+            <label className="ml-2 inline-flex items-center gap-1">
+              <span>{ui.asrSnapMode}</span>
+              <select
+                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5"
+                value={asrSnapMode}
+                onChange={(e) => setAsrSnapMode((e.target.value as "gentle" | "aggressive"))}
+              >
+                <option value="gentle">{ui.asrSnapGentle}</option>
+                <option value="aggressive">{ui.asrSnapAggressive}</option>
+              </select>
+            </label>
           </div>
         </div>
       </div>
