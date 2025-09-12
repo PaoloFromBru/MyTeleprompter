@@ -215,7 +215,87 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
   return (
     <div className="w-full mx-auto max-w-3xl">
-      <div className="flex items-center justify-between mb-3 gap-2 h-[44px] min-h-[44px] overflow-hidden">
+      {/* Mobile compact toolbar */}
+      <div className="flex sm:hidden items-center justify-between mb-3 gap-2 h-[44px]">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={permission !== "granted" ? start : (listening ? stop : start)}
+            className={`p-2 rounded ${listening ? "bg-sky-600 hover:bg-sky-500" : "bg-emerald-600 hover:bg-emerald-500"} text-white`}
+            aria-label={permission !== "granted" ? ui.micEnable : (listening ? ui.stop : ui.start)}
+            title={permission !== "granted" ? ui.micEnable : (listening ? ui.stop : ui.start)}
+            disabled={isClient ? micSupported === false : undefined}
+          >
+            {/* mic icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+              <path d="M19 10a7 7 0 0 1-14 0"/>
+              <path d="M12 17v5"/>
+            </svg>
+          </button>
+          <button
+            onClick={reset}
+            className="p-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white"
+            aria-label={ui.reset}
+            title={ui.reset}
+            type="button"
+          >
+            {/* reset icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => nudgeByViewport(-1)}
+            className="p-2 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+            aria-label={ui.nudgeBackTitle}
+            title={ui.nudgeBackTitle}
+            type="button"
+          >
+            {/* up icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+          </button>
+          <button
+            onClick={() => nudgeByViewport(1)}
+            className="p-2 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+            aria-label={ui.nudgeForwardTitle}
+            title={ui.nudgeForwardTitle}
+            type="button"
+          >
+            {/* down icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setAsrEnabled((v) => !v)}
+            className={`p-2 rounded text-white ${asrEnabled ? "bg-emerald-600 hover:bg-emerald-500" : "bg-neutral-600 hover:bg-neutral-500"}`}
+            aria-label={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
+            title={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
+            type="button"
+            disabled={!asrSupported}
+          >
+            {/* waveform icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12h2M7 12h2M11 12h2M15 12h2M19 12h2"/>
+              <path d="M7 8v8M11 6v12M15 8v8"/>
+            </svg>
+          </button>
+          <span className="text-xs tabular-nums px-1">{Math.round(wpm)} WPM</span>
+          {asrEnabled && (
+            <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
+          )}
+        </div>
+      </div>
+
+      {/* Desktop toolbar */}
+      <div className="hidden sm:flex items-center justify-between mb-3 gap-2 h-[44px] min-h-[44px] overflow-hidden">
         <div className="flex items-center gap-2 whitespace-nowrap">
           {permission !== "granted" ? (
             <button
@@ -268,9 +348,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
               </span>
             )}
+          </div>
         </div>
       </div>
-    </div>
 
       <div className="relative">
         <div
