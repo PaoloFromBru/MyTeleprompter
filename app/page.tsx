@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Teleprompter from "@/components/Teleprompter";
 import FileTextInput from "@/components/FileTextInput";
-import HelpPanel from "@/components/HelpPanel";
 import { messages, normalizeUILang } from "@/lib/i18n";
 
 type SampleTexts = { it?: string; en?: string };
@@ -95,23 +94,7 @@ export default function Home() {
   }, []);
   return (
     <main className="p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{ui.title}</h1>
-        <div className="flex items-center gap-2">
-          <label className="text-sm flex items-center gap-2">
-            <span>{ui.langLabel}</span>
-            <select
-              className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1 text-sm"
-              value={lang}
-              onChange={(e) => setLang(e.target.value)}
-            >
-              <option value="it-IT">Italiano (it-IT)</option>
-              <option value="en-US">English (en-US)</option>
-            </select>
-          </label>
-          <HelpPanel lang={lang} />
-        </div>
-      </div>
+      <h1 className="text-2xl font-semibold">{ui.title}</h1>
       <div className="flex items-center gap-3">
         <FileTextInput onLoadText={setText} lang={lang} />
         <button
@@ -127,50 +110,7 @@ export default function Home() {
           {ui.loadDemo}
         </button>
       </div>
-      {/* Settings */}
-      <div className="flex flex-wrap items-center gap-4 text-sm">
-        <div className="font-medium opacity-80">{ui.settingsTitle}</div>
-        <label className="flex items-center gap-2">
-          <span>{ui.fontSizeLabel}</span>
-          <input
-            type="range"
-            min={20}
-            max={72}
-            step={1}
-            value={settings.fontSizePx}
-            onChange={(e) => setSettings((s) => ({ ...s, fontSizePx: Number(e.target.value) }))}
-          />
-          <span className="tabular-nums w-10 text-right">{settings.fontSizePx}px</span>
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={settings.mirror}
-            onChange={(e) => setSettings((s) => ({ ...s, mirror: e.target.checked }))}
-          />
-          <span>{ui.mirrorModeLabel}</span>
-        </label>
-        <label className="flex items-center gap-2">
-          <span>{ui.baseWpmLabel}</span>
-          <input
-            type="number"
-            min={60}
-            max={260}
-            step={5}
-            className="w-20 bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
-            value={settings.baseWpm}
-            onChange={(e) => setSettings((s) => ({ ...s, baseWpm: Number(e.target.value) }))}
-          />
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={settings.holdOnSilence}
-            onChange={(e) => setSettings((s) => ({ ...s, holdOnSilence: e.target.checked }))}
-          />
-          <span>{ui.holdOnSilenceLabel}</span>
-        </label>
-      </div>
+      {/* Minimal header controls moved to Settings page */}
 
       <Teleprompter
         text={text}
