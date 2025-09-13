@@ -22,7 +22,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const ui = messages[normalizeUILang(lang)];
   const [asrEnabled, setAsrEnabled] = useState(false);
   const [asrWindowScreens, setAsrWindowScreens] = useState<1 | 2 | 4>(1);
-  const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive">("aggressive");
+  const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive" | "instant" | "sticky">("aggressive");
+  const [stickyThresholdPx, setStickyThresholdPx] = useState<number>(16);
   const [asrLeadWords, setAsrLeadWords] = useState<number>(2);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [lockToHighlight, setLockToHighlight] = useState(false);
@@ -277,6 +278,25 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 );
               }
             }
+          } else if (asrSnapMode === "instant") {
+            // Jump immediately with no easing; set exact pixel target
+            wordsReadRef.current = asrTargetWords;
+            integratorRef.current = 0;
+            const cont2 = containerRef.current, content2 = contentRef.current;
+            if (cont2 && content2) {
+              const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+              const el = wordElsRef.current[idx];
+              if (el) {
+                const target = Math.max(0,
+                  Math.min(
+                    content2.scrollHeight - cont2.clientHeight,
+                    el.offsetTop - cont2.clientHeight * ANCHOR_RATIO
+                  )
+                );
+                cont2.scrollTop = target;
+                overrideTarget = target;
+              }
+            }
           } else {
             // Gentle but stronger correction to avoid lag; prefer forward.
             wordsReadRef.current += Math.max(0, diff * 0.6);
@@ -323,6 +343,18 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           )
         );
         const target = overrideTarget ?? fallbackTarget;
+        // Sticky snap: if drift from target exceeds threshold, snap instantly
+        if (asrSnapMode === "sticky") {
+          const err = target - cont.scrollTop;
+          if (Math.abs(err) > stickyThresholdPx) {
+            cont.scrollTop = Math.max(0, Math.min(content.scrollHeight - cont.clientHeight, target));
+          } else {
+            const alphaS = Math.min(1, dt * 10);
+            cont.scrollTop = cont.scrollTop + err * alphaS;
+          }
+          raf = requestAnimationFrame(tick);
+          return;
+        }
         const alpha = Math.min(1, dt * 10);
         const nowMs = performance.now();
         if (nowMs > manualScrollUntilRef.current) {
@@ -337,7 +369,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
@@ -520,8 +552,24 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             >
               <option value="gentle">{ui.asrSnapGentle}</option>
               <option value="aggressive">{ui.asrSnapAggressive}</option>
+              <option value="instant">{ui.asrSnapInstant}</option>
+              <option value="sticky">{ui.asrSnapSticky}</option>
             </select>
           </label>
+          {asrSnapMode === "sticky" && (
+            <label className="inline-flex items-center gap-1">
+              <span>{ui.asrStickyThreshold}</span>
+              <input
+                type="number"
+                min={4}
+                max={48}
+                step={2}
+                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1 w-16"
+                value={stickyThresholdPx}
+                onChange={(e) => setStickyThresholdPx(Number(e.target.value))}
+              />
+            </label>
+          )}
           <label className="inline-flex items-center gap-1">
             <span>{ui.asrLeadLabel}</span>
             <select
@@ -632,8 +680,24 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               >
                 <option value="gentle">{ui.asrSnapGentle}</option>
                 <option value="aggressive">{ui.asrSnapAggressive}</option>
+                <option value="instant">{ui.asrSnapInstant}</option>
+                <option value="sticky">{ui.asrSnapSticky}</option>
               </select>
             </label>
+            {asrSnapMode === "sticky" && (
+              <label className="ml-2 inline-flex items-center gap-1">
+                <span>{ui.asrStickyThreshold}</span>
+                <input
+                  type="number"
+                  min={4}
+                  max={48}
+                  step={2}
+                  className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5 w-16"
+                  value={stickyThresholdPx}
+                  onChange={(e) => setStickyThresholdPx(Number(e.target.value))}
+                />
+              </label>
+            )}
             <label className="ml-2 inline-flex items-center gap-1">
               <span>{ui.asrLeadLabel}</span>
               <select

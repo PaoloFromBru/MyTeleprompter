@@ -49,6 +49,9 @@ export const messages: Record<UILang, {
   asrSnapMode: string;
   asrSnapGentle: string;
   asrSnapAggressive: string;
+  asrSnapInstant: string;
+  asrSnapSticky: string;
+  asrStickyThreshold: string;
   asrLeadLabel: string;
   lockToHighlightLabel: string;
   debugOverlayLabel: string;
@@ -97,6 +100,9 @@ export const messages: Record<UILang, {
     asrSnapMode: "Snap",
     asrSnapGentle: "Gentle",
     asrSnapAggressive: "Aggressive",
+    asrSnapInstant: "Instant",
+    asrSnapSticky: "Sticky",
+    asrStickyThreshold: "Threshold (px)",
     asrLeadLabel: "ASR lead",
     lockToHighlightLabel: "Lock to highlight",
     debugOverlayLabel: "Debug overlay",
@@ -145,6 +151,9 @@ export const messages: Record<UILang, {
     asrSnapMode: "Aggancio",
     asrSnapGentle: "Morbido",
     asrSnapAggressive: "Aggressivo",
+    asrSnapInstant: "Istantaneo",
+    asrSnapSticky: "Appiccicoso",
+    asrStickyThreshold: "Soglia (px)",
     asrLeadLabel: "Margine ASR",
     lockToHighlightLabel: "Blocca all'evidenziato",
     debugOverlayLabel: "Overlay debug",
