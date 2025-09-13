@@ -164,7 +164,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => {
     const cont = containerRef.current;
     if (!cont) return;
-    const bump: EventListener = () => { manualScrollUntilRef.current = performance.now() + 800; };
+    const bump: EventListener = () => { manualScrollUntilRef.current = performance.now() + 120; };
     cont.addEventListener('wheel', bump, { passive: true });
     cont.addEventListener('touchstart', bump, { passive: true });
     cont.addEventListener('touchmove', bump, { passive: true });
@@ -268,14 +268,16 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             }
           }
           // Position caret horizontally over target word
-          const cont3 = containerRef.current, content3 = contentRef.current;
+          const cont3 = containerRef.current;
           const caret = caretRef.current;
-          if (caret && cont3 && content3) {
+          if (caret && cont3) {
             const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
             const el = wordElsRef.current[idx];
             if (el) {
-              const left = (content3.offsetLeft || 0) + el.offsetLeft + el.clientWidth / 2;
-              caret.style.left = `${left}px`;
+              const contRect = cont3.getBoundingClientRect();
+              const elRect = el.getBoundingClientRect();
+              const left = (elRect.left - contRect.left) + elRect.width / 2;
+              caret.style.left = `${Math.round(left)}px`;
             }
           }
         }
@@ -374,6 +376,29 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="1 4 1 10 7 10"/>
               <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </button>
+          <button
+            onClick={() => {
+              const cont = containerRef.current;
+              if (!cont) return;
+              if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+              } else {
+                try { cont.requestFullscreen(); } catch {}
+              }
+            }}
+            className="p-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white"
+            aria-label="Fullscreen"
+            title="Fullscreen"
+            type="button"
+          >
+            {/* fullscreen icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 4 20 4 20 8"/>
+              <polyline points="8 20 4 20 4 16"/>
+              <polyline points="20 16 20 20 16 20"/>
+              <polyline points="4 8 4 4 8 4"/>
             </svg>
           </button>
         </div>
@@ -659,6 +684,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             <div className="h-0.5 bg-emerald-400/80 shadow-[0_0_12px_rgba(16,185,129,0.6)]" />
           </div>
         </div>
+        {/* Caret over anchored word (inside relative container so positioning matches scroller) */}
+        <div
+          ref={caretRef}
+          className="pointer-events-none absolute z-20"
+          style={{ top: `${ANCHOR_RATIO * 100}%`, transform: "translate(-50%, -8px)" }}
+        >
+          <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.7)]" />
+        </div>
       </div>
       {asrEnabled && (
         <div className="mt-2 text-xs opacity-80">
@@ -666,14 +699,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           <div className="truncate" title={lastTranscript}>{lastTranscript || "(no audio recognized yet)"}</div>
         </div>
       )}
-      {/* Caret that hovers over the anchored word */}
-      <div
-        ref={caretRef}
-        className="pointer-events-none absolute z-20"
-        style={{ top: `${ANCHOR_RATIO * 100}%`, transform: "translate(-50%, -8px)" }}
-      >
-        <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.7)]" />
-      </div>
       {showDebug && (
         <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1">
           <div><b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
