@@ -114,6 +114,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     return idx + 1; // convert to 1-based word count
   }, [matchedIndex, tokenCumulativePerWord]);
 
+  const [highlightWords, setHighlightWords] = useState(0);
+  const highlightWordsRef = useRef(0);
+
   // Debug overlay renders live values; no extra state needed.
 
   const wordsReadRef = useRef(0);
@@ -162,6 +165,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     wordsReadRef.current = 0;
     integratorRef.current = 0;
     if (containerRef.current) containerRef.current.scrollTop = 0;
+    highlightWordsRef.current = 0;
+    setHighlightWords(0);
     try { resetASR(); } catch (err) {
       console.error("Failed to reset ASR", err);
     }
@@ -334,6 +339,12 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         }
       }
 
+      const newHighlight = Math.min(recognizedWords, Math.round(wordsReadRef.current));
+      if (newHighlight !== highlightWordsRef.current) {
+        highlightWordsRef.current = newHighlight;
+        setHighlightWords(newHighlight);
+      }
+
       const cont = containerRef.current, content = contentRef.current;
       if (cont && content) {
         const fallbackTarget = Math.max(0,
@@ -369,7 +380,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
@@ -754,7 +765,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               const isWs = /^\s+$/.test(part);
               if (isWs) return <span key={i}>{part}</span>;
               wordIdx += 1;
-              const seen = wordIdx <= recognizedWords;
+              const seen = wordIdx <= highlightWords;
               return (
                 <span
                   key={i}
@@ -765,7 +776,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 </span>
               );
             });
-          }, [text, recognizedWords, totalWords])}
+          }, [text, highlightWords, totalWords])}
         </div>
         </div>
         {/* Reading anchor guide (fixed over scroller) */}
@@ -800,7 +811,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       {showDebug && (
         <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1">
           <div><b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
-          <div><b>idx</b>: {matchedIndex ?? "-"} • <b>seen</b>: {recognizedWords}</div>
+          <div><b>idx</b>: {matchedIndex ?? "-"} • <b>seen</b>: {highlightWords}</div>
           <div><b>wordsRead</b>: {Math.round(wordsReadRef.current)}</div>
           <div><b>windowTokens</b>: {dynamicWindowTokens} • <b>viewportWords</b>: {Math.round(viewportWords)}</div>
           <div><b>px/word</b>: {pxPerWord.toFixed(2)} • <b>recentASR</b>: {String(recentAsr)}</div>
