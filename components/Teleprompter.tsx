@@ -25,8 +25,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive">("aggressive");
   const [asrLeadWords, setAsrLeadWords] = useState<number>(2);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
+  const [lockToHighlight, setLockToHighlight] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
+  const wordElsRef = useRef<Array<HTMLSpanElement | null>>([]);
 
   const words = useMemo(() =>
     text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean), [text]
@@ -87,6 +90,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     matchedIndex != null ? Math.round((matchedIndex + 1) * tokenToWordRatio) : 0
   , [matchedIndex, tokenToWordRatio]);
 
+  // Debug overlay renders live values; no extra state needed.
+
   const wordsReadRef = useRef(0);
   const lastTsRef = useRef<number | null>(null);
   const integratorRef = useRef(0);
@@ -126,6 +131,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     }, 400);
     return () => clearInterval(id);
   }, [lastMatchAt]);
+
+  // no-op effect for debug now
 
   const reset = () => {
     wordsReadRef.current = 0;
@@ -177,12 +184,16 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
       const wordsPerSec = (wpmRef.current || 0) / 60;
       let next = wordsReadRef.current;
-      if (talkingRef.current) next += wordsPerSec * dt;
-      else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
+      const allowDrift = !(asrEnabled && lockToHighlight);
+      if (allowDrift) {
+        if (talkingRef.current) next += wordsPerSec * dt;
+        else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
+      }
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
       // If ASR provides a match, align the anchor so that the recognized word sits at the green line.
       // We add a small forward lead so the user reads the word at the line, not behind it.
+      let overrideTarget: number | null = null;
       if (speechIdxRef.current != null) {
         const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
         const asrTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
@@ -192,39 +203,55 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             integratorRef.current = 0;
             const cont2 = containerRef.current, content2 = contentRef.current;
             if (cont2 && content2) {
-              const target = Math.max(0,
-                Math.min(
-                  content2.scrollHeight - cont2.clientHeight,
-                  wordsReadRef.current * pxPerWord - cont2.clientHeight * ANCHOR_RATIO
-                )
-              );
-              cont2.scrollTop = target;
+              const idx = Math.max(0, Math.min(totalWords - 1, Math.round(wordsReadRef.current) - 1));
+              const el = wordElsRef.current[idx];
+              if (el) {
+                overrideTarget = Math.max(0,
+                  Math.min(
+                    content2.scrollHeight - cont2.clientHeight,
+                    el.offsetTop - cont2.clientHeight * ANCHOR_RATIO
+                  )
+                );
+              }
             }
           } else {
             // Gentle but stronger correction to avoid lag; forward-only.
             const diff = asrTargetWords - wordsReadRef.current;
             wordsReadRef.current += Math.max(0, diff * 0.6);
+            const cont2 = containerRef.current, content2 = contentRef.current;
+            if (cont2 && content2) {
+              const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+              const el = wordElsRef.current[idx];
+              if (el) {
+                overrideTarget = Math.max(0,
+                  Math.min(
+                    content2.scrollHeight - cont2.clientHeight,
+                    el.offsetTop - cont2.clientHeight * ANCHOR_RATIO
+                  )
+                );
+              }
+            }
           }
         }
       }
 
       const cont = containerRef.current, content = contentRef.current;
       if (cont && content) {
-        const target = Math.max(0,
+        const fallbackTarget = Math.max(0,
           Math.min(
             content.scrollHeight - cont.clientHeight,
             wordsReadRef.current * pxPerWord - cont.clientHeight * ANCHOR_RATIO
           )
         );
-        // Follow target quickly with easing to avoid lag and oscillation
-        const alpha = Math.min(1, dt * 10); // ~100ms time constant
+        const target = overrideTarget ?? fallbackTarget;
+        const alpha = Math.min(1, dt * 10);
         cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
@@ -395,6 +422,23 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               <option value={3}>3</option>
               <option value={4}>4</option>
             </select>
+            </label>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={lockToHighlight}
+              onChange={(e) => setLockToHighlight(e.target.checked)}
+              disabled={!asrEnabled}
+            />
+            <span>{ui.lockToHighlightLabel}</span>
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={showDebug}
+              onChange={(e) => setShowDebug(e.target.checked)}
+            />
+            <span>{ui.debugOverlayLabel}</span>
           </label>
         </div>
       )}
@@ -491,6 +535,23 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 <option value={4}>4</option>
               </select>
             </label>
+            <label className="ml-2 inline-flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={lockToHighlight}
+                onChange={(e) => setLockToHighlight(e.target.checked)}
+                disabled={!asrEnabled}
+              />
+              <span>{ui.lockToHighlightLabel}</span>
+            </label>
+            <label className="ml-2 inline-flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={showDebug}
+                onChange={(e) => setShowDebug(e.target.checked)}
+              />
+              <span>{ui.debugOverlayLabel}</span>
+            </label>
           </div>
         </div>
       </div>
@@ -507,19 +568,27 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           style={{ fontSize: fontSizePx, transform: mirror ? "scaleX(-1)" : undefined }}
         >
           {useMemo(() => {
-            // Render text preserving whitespace, but wrap word-like chunks so we can highlight
+            // Render text preserving whitespace, wrapping word-like chunks for highlighting and anchoring
             const parts = text.split(/(\s+)/);
             let wordIdx = 0;
+            // Reset word element refs array size on render
+            wordElsRef.current = new Array(totalWords).fill(null);
             return parts.map((part, i) => {
               const isWs = /^\s+$/.test(part);
               if (isWs) return <span key={i}>{part}</span>;
               wordIdx += 1;
               const seen = wordIdx <= recognizedWords;
               return (
-                <span key={i} className={seen ? "text-emerald-300" : undefined}>{part}</span>
+                <span
+                  key={i}
+                  ref={(el) => { wordElsRef.current[wordIdx - 1] = el; }}
+                  className={seen ? "text-emerald-300" : undefined}
+                >
+                  {part}
+                </span>
               );
             });
-          }, [text, recognizedWords])}
+          }, [text, recognizedWords, totalWords])}
         </div>
         </div>
         {/* Reading anchor guide (fixed over scroller) */}
@@ -541,6 +610,15 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div className="mt-2 text-xs opacity-80">
           <div className="font-medium">ASR transcript (last):</div>
           <div className="truncate" title={lastTranscript}>{lastTranscript || "(no audio recognized yet)"}</div>
+        </div>
+      )}
+      {showDebug && (
+        <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1">
+          <div><b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
+          <div><b>idx</b>: {matchedIndex ?? "-"} • <b>seen</b>: {recognizedWords}</div>
+          <div><b>wordsRead</b>: {Math.round(wordsReadRef.current)}</div>
+          <div><b>windowTokens</b>: {dynamicWindowTokens} • <b>viewportWords</b>: {Math.round(viewportWords)}</div>
+          <div><b>px/word</b>: {pxPerWord.toFixed(2)} • <b>recentASR</b>: {String(recentAsr)}</div>
         </div>
       )}
     </div>
