@@ -149,7 +149,9 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
         const err = e?.error || e?.message || String(e?.type || "error");
         setLastError(err);
         console.warn("ASR error:", err);
-      } catch {}
+      } catch (error) {
+        console.error("Failed to handle ASR error", error);
+      }
       // Swallow errors; try to restart once the engine ends
     };
     rec.onend = () => {
@@ -164,13 +166,17 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
 
     recRef.current = rec;
     setListening(true);
-    try { rec.start(); } catch {}
+    try { rec.start(); } catch (err) {
+      console.error("Failed to start speech recognition", err);
+    }
   }, [enabled, lang, textTokens, windowRadius]);
 
   const stop = useCallback(() => {
     const rec = recRef.current;
     if (rec) {
-      try { rec.stop(); } catch {}
+      try { rec.stop(); } catch (err) {
+        console.error("Failed to stop speech recognition", err);
+      }
     }
     recRef.current = null;
     setListening(false);
