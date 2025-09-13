@@ -23,6 +23,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [asrEnabled, setAsrEnabled] = useState(false);
   const [asrWindowScreens, setAsrWindowScreens] = useState<1 | 2 | 4>(1);
   const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive">("aggressive");
+  const [asrLeadWords, setAsrLeadWords] = useState<number>(2);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
@@ -180,12 +181,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
-      // If ASR provides a match ahead (within window), apply correction per snap mode
+      // If ASR provides a match, align the anchor so that the recognized word sits at the green line.
+      // We add a small forward lead so the user reads the word at the line, not behind it.
       if (speechIdxRef.current != null) {
-        const targetIdxWords = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
-        if (targetIdxWords > wordsReadRef.current + 0.25) {
+        const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
+        const asrTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
+        if (asrTargetWords > wordsReadRef.current + 0.1) {
           if (asrSnapMode === "aggressive") {
-            wordsReadRef.current = targetIdxWords;
+            wordsReadRef.current = asrTargetWords;
             integratorRef.current = 0;
             const cont2 = containerRef.current, content2 = contentRef.current;
             if (cont2 && content2) {
@@ -198,9 +201,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               cont2.scrollTop = target;
             }
           } else {
-            // Gentle: move toward target gradually (forward only)
-            const diff = targetIdxWords - wordsReadRef.current;
-            wordsReadRef.current += Math.max(0, diff * 0.25);
+            // Gentle but stronger correction to avoid lag; forward-only.
+            const diff = asrTargetWords - wordsReadRef.current;
+            wordsReadRef.current += Math.max(0, diff * 0.6);
           }
         }
       }
@@ -221,7 +224,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
@@ -379,6 +382,20 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               <option value="aggressive">{ui.asrSnapAggressive}</option>
             </select>
           </label>
+          <label className="inline-flex items-center gap-1">
+            <span>{ui.asrLeadLabel}</span>
+            <select
+              className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+              value={asrLeadWords}
+              onChange={(e) => setAsrLeadWords(Number(e.target.value))}
+            >
+              <option value={0}>0</option>
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+              <option value={4}>4</option>
+            </select>
+          </label>
         </div>
       )}
 
@@ -458,6 +475,20 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               >
                 <option value="gentle">{ui.asrSnapGentle}</option>
                 <option value="aggressive">{ui.asrSnapAggressive}</option>
+              </select>
+            </label>
+            <label className="ml-2 inline-flex items-center gap-1">
+              <span>{ui.asrLeadLabel}</span>
+              <select
+                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5"
+                value={asrLeadWords}
+                onChange={(e) => setAsrLeadWords(Number(e.target.value))}
+              >
+                <option value={0}>0</option>
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+                <option value={4}>4</option>
               </select>
             </label>
           </div>

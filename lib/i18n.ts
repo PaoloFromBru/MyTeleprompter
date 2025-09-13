@@ -49,6 +49,7 @@ export const messages: Record<UILang, {
   asrSnapMode: string;
   asrSnapGentle: string;
   asrSnapAggressive: string;
+  asrLeadLabel: string;
 }> = {
   en: {
     title: "Adaptive teleprompter (closed-loop)",
@@ -94,6 +95,7 @@ export const messages: Record<UILang, {
     asrSnapMode: "Snap",
     asrSnapGentle: "Gentle",
     asrSnapAggressive: "Aggressive",
+    asrLeadLabel: "ASR lead",
   },
   it: {
     title: "Teleprompter adattivo (feedback chiuso)",
@@ -139,5 +141,6 @@ export const messages: Record<UILang, {
     asrSnapMode: "Aggancio",
     asrSnapGentle: "Morbido",
     asrSnapAggressive: "Aggressivo",
+    asrLeadLabel: "Margine ASR",
   },
 };
