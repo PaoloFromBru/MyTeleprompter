@@ -183,6 +183,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     wordsReadRef.current = Math.max(0, Math.min(totalWords, wordsReadRef.current + sign * deltaWords));
     integratorRef.current = 0;
   }, [pxPerWord, totalWords]);
+  // Keep lockToHighlight consistent with ASR state
+  useEffect(() => {
+    if (!asrEnabled && lockToHighlight) setLockToHighlight(false);
+  }, [asrEnabled, lockToHighlight]);
 
   // Re-anchor when geometry changes: keep current scroll aligned to anchor
   useEffect(() => {
@@ -232,7 +236,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       if (speechIdxRef.current != null) {
         const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
         const asrTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
-        if (asrTargetWords > wordsReadRef.current + 0.1) {
+        const diff = asrTargetWords - wordsReadRef.current;
+        if (diff > 0.1) {
           if (asrSnapMode === "aggressive") {
             wordsReadRef.current = asrTargetWords;
             integratorRef.current = 0;
@@ -250,8 +255,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               }
             }
           } else {
-            // Gentle but stronger correction to avoid lag; forward-only.
-            const diff = asrTargetWords - wordsReadRef.current;
+            // Gentle but stronger correction to avoid lag; prefer forward.
             wordsReadRef.current += Math.max(0, diff * 0.6);
             const cont2 = containerRef.current, content2 = contentRef.current;
             if (cont2 && content2) {
@@ -267,7 +271,13 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               }
             }
           }
-          // Position caret horizontally over target word
+        } else if (diff < -1.0) {
+          // We're significantly ahead (e.g., after manual scroll). Allow a limited backward catch-up.
+          const backStep = Math.min(2, Math.abs(diff)) * 0.7;
+          wordsReadRef.current = Math.max(0, asrTargetWords + backStep);
+          overrideTarget = null;
+        }
+        // Position caret horizontally over target word
           const cont3 = containerRef.current;
           const caret = caretRef.current;
           if (caret && cont3) {
