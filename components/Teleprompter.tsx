@@ -59,7 +59,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       if (!cont || !content || totalWords === 0) return;
       const usable = content.scrollHeight - cont.clientHeight;
       setPxPerWord(Math.max(1, usable / Math.max(1, totalWords)));
-    };
+    }
     const id = setTimeout(calc, 50);
     // On mobile, orientation changes trigger a resize; listening to resize is enough
     window.addEventListener("resize", calc);
@@ -88,9 +88,30 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     windowRadius: dynamicWindowTokens,
   });
 
-  const recognizedWords = useMemo(() =>
-    matchedIndex != null ? Math.round((matchedIndex + 1) * tokenToWordRatio) : 0
-  , [matchedIndex, tokenToWordRatio]);
+  // Map ASR token index -> word index using the same whitespace split used for rendering.
+  const tokenCumulativePerWord = useMemo(() => {
+    const parts = text.split(/(\s+)/);
+    const cum: number[] = [];
+    let acc = 0;
+    for (const part of parts) {
+      const isWs = /^\s+$/.test(part);
+      if (isWs) continue;
+      const tok = normalizeTokenLocal(part);
+      const inc = tok ? 1 : 0;
+      acc += inc;
+      cum.push(acc);
+    }
+    return cum;
+  }, [text]);
+
+  const recognizedWords = useMemo(() => {
+    if (matchedIndex == null) return 0;
+    const t = matchedIndex + 1; // last token in the match, 1-based count
+    // first word whose cumulative token count >= t
+    const idx = tokenCumulativePerWord.findIndex((c) => c >= t);
+    if (idx < 0) return tokenCumulativePerWord.length;
+    return idx + 1; // convert to 1-based word count
+  }, [matchedIndex, tokenCumulativePerWord]);
 
   // Debug overlay renders live values; no extra state needed.
 
@@ -198,8 +219,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   }, [pxPerWord, totalWords]);
 
   useEffect(() => {
-    let raf: number;
-    const loop = () => {
+    let raf = 0;
+
+    const tick = () => {
       const now = performance.now();
       if (lastTsRef.current == null) lastTsRef.current = now;
       const dt = (now - lastTsRef.current) / 1000;
@@ -214,8 +236,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       }
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
-      // If ASR provides a match, align the anchor so that the recognized word sits at the green line.
-      // We add a small forward lead so the user reads the word at the line, not behind it.
       // Accept current ASR match within a generous window around current anchor
       const contA = containerRef.current;
       if (contA && matchedIndex != null) {
@@ -272,23 +292,21 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             }
           }
         } else if (diff < -1.0) {
-          // We're significantly ahead (e.g., after manual scroll). Allow a limited backward catch-up.
           const backStep = Math.min(2, Math.abs(diff)) * 0.7;
           wordsReadRef.current = Math.max(0, asrTargetWords + backStep);
           overrideTarget = null;
         }
         // Position caret horizontally over target word
-          const cont3 = containerRef.current;
-          const caret = caretRef.current;
-          if (caret && cont3) {
-            const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
-            const el = wordElsRef.current[idx];
-            if (el) {
-              const contRect = cont3.getBoundingClientRect();
-              const elRect = el.getBoundingClientRect();
-              const left = (elRect.left - contRect.left) + elRect.width / 2;
-              caret.style.left = `${Math.round(left)}px`;
-            }
+        const cont3 = containerRef.current;
+        const caret = caretRef.current;
+        if (caret && cont3) {
+          const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+          const el = wordElsRef.current[idx];
+          if (el) {
+            const contRect = cont3.getBoundingClientRect();
+            const elRect = el.getBoundingClientRect();
+            const left = (elRect.left - contRect.left) + elRect.width / 2;
+            caret.style.left = `${Math.round(left)}px`;
           }
         }
       }
@@ -303,19 +321,18 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         );
         const target = overrideTarget ?? fallbackTarget;
         const alpha = Math.min(1, dt * 10);
-        // Respect manual user scrolling briefly
         const nowMs = performance.now();
         if (nowMs > manualScrollUntilRef.current) {
           cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
         } else {
-          // keep wordsRead in sync with manual scroll
           const targetWords = (cont.scrollTop + cont.clientHeight * ANCHOR_RATIO) / Math.max(1, pxPerWord);
           wordsReadRef.current = Math.max(0, Math.min(totalWords, targetWords));
         }
       }
-      raf = requestAnimationFrame(loop);
+      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(loop);
+
+    raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex]);
 
