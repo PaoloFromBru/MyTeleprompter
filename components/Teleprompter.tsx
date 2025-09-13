@@ -82,6 +82,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     windowRadius: dynamicWindowTokens,
   });
 
+  const recognizedWords = useMemo(() =>
+    matchedIndex != null ? Math.round((matchedIndex + 1) * tokenToWordRatio) : 0
+  , [matchedIndex, tokenToWordRatio]);
+
   const wordsReadRef = useRef(0);
   const lastTsRef = useRef<number | null>(null);
   const integratorRef = useRef(0);
@@ -471,7 +475,20 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           className="text-2xl md:text-3xl whitespace-pre-wrap select-none"
           style={{ fontSize: fontSizePx, transform: mirror ? "scaleX(-1)" : undefined }}
         >
-          {text}
+          {useMemo(() => {
+            // Render text preserving whitespace, but wrap word-like chunks so we can highlight
+            const parts = text.split(/(\s+)/);
+            let wordIdx = 0;
+            return parts.map((part, i) => {
+              const isWs = /^\s+$/.test(part);
+              if (isWs) return <span key={i}>{part}</span>;
+              wordIdx += 1;
+              const seen = wordIdx <= recognizedWords;
+              return (
+                <span key={i} className={seen ? "text-emerald-300" : undefined}>{part}</span>
+              );
+            });
+          }, [text, recognizedWords])}
         </div>
         </div>
         {/* Reading anchor guide (fixed over scroller) */}
