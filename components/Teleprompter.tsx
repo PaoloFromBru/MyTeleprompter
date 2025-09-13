@@ -30,6 +30,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
   const wordElsRef = useRef<Array<HTMLSpanElement | null>>([]);
+  const caretRef = useRef<HTMLDivElement | null>(null);
+  const manualScrollUntilRef = useRef<number>(0);
 
   const words = useMemo(() =>
     text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean), [text]
@@ -158,6 +160,23 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     }
   }, []);
 
+  // Detect manual user scrolling (wheel/touch/scroll) and pause auto-follow briefly
+  useEffect(() => {
+    const cont = containerRef.current;
+    if (!cont) return;
+    const bump: EventListener = () => { manualScrollUntilRef.current = performance.now() + 800; };
+    cont.addEventListener('wheel', bump, { passive: true });
+    cont.addEventListener('touchstart', bump, { passive: true });
+    cont.addEventListener('touchmove', bump, { passive: true });
+    cont.addEventListener('scroll', bump, { passive: true });
+    return () => {
+      cont.removeEventListener('wheel', bump);
+      cont.removeEventListener('touchstart', bump);
+      cont.removeEventListener('touchmove', bump);
+      cont.removeEventListener('scroll', bump);
+    };
+  }, []);
+
   const nudgeByViewport = useCallback((sign: 1 | -1) => {
     const cont = containerRef.current;
     const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
@@ -193,6 +212,22 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
       // If ASR provides a match, align the anchor so that the recognized word sits at the green line.
       // We add a small forward lead so the user reads the word at the line, not behind it.
+      // Accept current ASR match within a generous window around current anchor
+      const contA = containerRef.current;
+      if (contA && matchedIndex != null) {
+        const visibleWords = contA.clientHeight / Math.max(1, pxPerWord);
+        const currentWords = wordsReadRef.current;
+        const currentTok = Math.round(currentWords / Math.max(1e-6, tokenToWordRatio));
+        const viewportTokens = visibleWords / Math.max(1e-6, tokenToWordRatio);
+        const aheadTok = Math.ceil(viewportTokens * asrWindowScreens);
+        const behindTok = Math.ceil(viewportTokens * 3);
+        const minTok = Math.max(0, currentTok - behindTok);
+        const maxTok = currentTok + aheadTok;
+        if (matchedIndex >= minTok && matchedIndex <= maxTok) {
+          speechIdxRef.current = matchedIndex;
+        }
+      }
+
       let overrideTarget: number | null = null;
       if (speechIdxRef.current != null) {
         const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
@@ -232,6 +267,17 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               }
             }
           }
+          // Position caret horizontally over target word
+          const cont3 = containerRef.current, content3 = contentRef.current;
+          const caret = caretRef.current;
+          if (caret && cont3 && content3) {
+            const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+            const el = wordElsRef.current[idx];
+            if (el) {
+              const left = (content3.offsetLeft || 0) + el.offsetLeft + el.clientWidth / 2;
+              caret.style.left = `${left}px`;
+            }
+          }
         }
       }
 
@@ -245,13 +291,21 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         );
         const target = overrideTarget ?? fallbackTarget;
         const alpha = Math.min(1, dt * 10);
-        cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
+        // Respect manual user scrolling briefly
+        const nowMs = performance.now();
+        if (nowMs > manualScrollUntilRef.current) {
+          cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
+        } else {
+          // keep wordsRead in sync with manual scroll
+          const targetWords = (cont.scrollTop + cont.clientHeight * ANCHOR_RATIO) / Math.max(1, pxPerWord);
+          wordsReadRef.current = Math.max(0, Math.min(totalWords, targetWords));
+        }
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
@@ -559,7 +613,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       <div className="relative">
         <div
           ref={containerRef}
-          className="h-[78vh] border rounded-lg overflow-y-hidden bg-black text-white px-10 py-16 leading-relaxed tracking-wide"
+          className="h-[78vh] border rounded-lg overflow-y-auto touch-pan-y overscroll-contain bg-black text-white px-10 py-16 leading-relaxed tracking-wide"
           style={{ scrollBehavior: "auto" }}
         >
         <div
@@ -612,6 +666,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           <div className="truncate" title={lastTranscript}>{lastTranscript || "(no audio recognized yet)"}</div>
         </div>
       )}
+      {/* Caret that hovers over the anchored word */}
+      <div
+        ref={caretRef}
+        className="pointer-events-none absolute z-20"
+        style={{ top: `${ANCHOR_RATIO * 100}%`, transform: "translate(-50%, -8px)" }}
+      >
+        <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.7)]" />
+      </div>
       {showDebug && (
         <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1">
           <div><b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
