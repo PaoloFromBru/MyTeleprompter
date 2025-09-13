@@ -444,7 +444,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       )}
 
       {/* Desktop toolbar */}
-      <div className="hidden sm:flex items-center justify-between mb-3 gap-2 h-[44px] min-h-[44px] overflow-hidden">
+      <div className="hidden sm:flex flex-wrap items-start justify-between mb-3 gap-2 min-h-[44px]">
         <div className="flex items-center gap-2 whitespace-nowrap">
           {permission !== "granted" ? (
             <button
@@ -462,7 +462,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           )}
           <button onClick={reset} className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-sm text-white">⟲ {ui.reset}</button>
         </div>
-        <div className="flex items-center gap-2 text-xs tabular-nums whitespace-nowrap overflow-x-auto">
+        <div className="flex items-center gap-2 text-xs tabular-nums flex-wrap">
           <span className="inline-block max-w-[60vw] truncate">WPM: <b>{Math.round(wpm)}</b> • {talking ? ui.statusSpeaking : ui.statusPaused} • {ui.pxWord}: {pxPerWord.toFixed(1)}</span>
           <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
           <div className="flex items-center gap-1 whitespace-nowrap">
