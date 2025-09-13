@@ -18,7 +18,8 @@ export default function HelpPanel({ lang }: { lang?: string }) {
       const w = typeof window !== "undefined" ? window : undefined;
       const asr = !!(w && ("SpeechRecognition" in w || "webkitSpeechRecognition" in w));
       setEnv({ secure, mic, asr });
-    } catch {
+    } catch (err) {
+      console.error("Failed to detect environment features", err);
       setEnv({ secure: false, mic: false, asr: false });
     }
   }, []);

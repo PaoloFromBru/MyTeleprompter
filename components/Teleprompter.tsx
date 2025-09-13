@@ -161,7 +161,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     wordsReadRef.current = 0;
     integratorRef.current = 0;
     if (containerRef.current) containerRef.current.scrollTop = 0;
-    try { resetASR(); } catch {}
+    try { resetASR(); } catch (err) {
+      console.error("Failed to reset ASR", err);
+    }
   };
 
   // Avoid hydration mismatch: detect client and feature support after mount
@@ -176,7 +178,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         ("webkitGetUserMedia" in nav) || ("mozGetUserMedia" in nav) || ("getUserMedia" in nav))
       );
       setMicSupported(supported);
-    } catch {
+    } catch (err) {
+      console.error("Failed to detect mic support", err);
       setMicSupported(false);
     }
   }, []);
@@ -363,9 +366,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         const cont = containerRef.current;
         if (!cont) return;
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
         } else {
-          try { cont.requestFullscreen(); } catch {}
+          try { cont.requestFullscreen(); } catch (err) {
+            console.error("Failed to request fullscreen", err);
+          }
         }
       }
     };
@@ -410,9 +415,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               const cont = containerRef.current;
               if (!cont) return;
               if (document.fullscreenElement) {
-                document.exitFullscreen().catch(() => {});
+                document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
               } else {
-                try { cont.requestFullscreen(); } catch {}
+                try { cont.requestFullscreen(); } catch (err) {
+                  console.error("Failed to request fullscreen", err);
+                }
               }
             }}
             className="p-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white"

@@ -7,7 +7,8 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc lib/textConverters.ts lib/textConverters.test.ts --module commonjs --target ES2017 --esModuleInterop --outDir .tmp && node --test .tmp/textConverters.test.js && rm -rf .tmp"
   },
   "dependencies": {
     "react": "19.1.0",
