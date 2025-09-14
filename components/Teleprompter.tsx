@@ -751,7 +751,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       <div className="relative">
         <div
           ref={containerRef}
-          className="h-[78vh] border rounded-lg overflow-y-auto touch-pan-y overscroll-contain bg-black text-white px-10 py-16 leading-relaxed tracking-wide"
+          className="h-[68vh] sm:h-[78vh] border rounded-lg overflow-y-auto touch-pan-y overscroll-contain bg-black text-white px-6 sm:px-10 py-10 sm:py-16 leading-relaxed tracking-wide"
           style={{ scrollBehavior: "auto" }}
         >
         <div

@@ -36,7 +36,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <TopNav />
-        <main className="mx-auto max-w-5xl px-4 py-4">
+        <main className="mx-auto max-w-5xl px-4 py-4 pb-24">
           {children}
         </main>
       </body>

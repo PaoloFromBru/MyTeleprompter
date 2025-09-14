@@ -143,12 +143,14 @@ export default function Home() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   return (
-    <main className="p-6 space-y-4">
+    <main className="p-4 sm:p-6 space-y-4">
       <h1 className="text-2xl font-semibold">{ui.title}</h1>
-      <div className="flex items-center gap-3">
-        <FileTextInput onLoadText={setText} lang={lang} />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-full sm:w-auto">
+          <FileTextInput onLoadText={setText} lang={lang} />
+        </div>
         <button
-          className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300 text-sm"
+          className="px-3 py-2 rounded bg-neutral-200 hover:bg-neutral-300 text-sm w-full sm:w-auto"
           onClick={() => {
             const norm = normalizeUILang(lang) as "it" | "en";
             const existing = samples[norm];
@@ -160,7 +162,7 @@ export default function Home() {
           {ui.loadDemo}
         </button>
         <button
-          className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300 text-sm"
+          className="px-3 py-2 rounded bg-neutral-200 hover:bg-neutral-300 text-sm w-full sm:w-auto"
           onClick={saveScript}
           type="button"
         >

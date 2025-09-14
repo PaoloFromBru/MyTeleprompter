@@ -8,7 +8,7 @@ export default function FileTextInput({ onLoadText, lang }: { onLoadText: (text:
   const fileRef = useRef<HTMLInputElement | null>(null);
   const handleFile = async (file: File) => onLoadText(await extractTextFromFile(file));
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 w-full">
       <input
         ref={fileRef}
         type="file"
@@ -17,10 +17,10 @@ export default function FileTextInput({ onLoadText, lang }: { onLoadText: (text:
           const f = e.target.files?.[0];
           if (f) handleFile(f);
         }}
-        className="block text-sm"
+        className="block text-sm max-w-full"
       />
       <button
-        className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-white text-sm"
+        className="px-3 py-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white text-sm w-full sm:w-auto"
         onClick={() => fileRef.current?.click()}
         type="button"
       >
