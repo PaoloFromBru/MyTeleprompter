@@ -113,6 +113,20 @@ body {
 .btn-ghost {
   background: transparent;
 }
+.btn-nav {
+  background: transparent;
+  border-color: transparent;
+  padding: 0.4rem 0.7rem;
+  font-weight: 500;
+  color: inherit;
+}
+.btn-nav:hover { background: rgba(2,6,23,0.06); }
+.dark .btn-nav:hover { background: rgba(255,255,255,0.06); }
+.btn-nav-active {
+  background: rgba(2,6,23,0.08);
+  border-color: var(--border);
+}
+.dark .btn-nav-active { background: rgba(255,255,255,0.08); }
 .btn-danger {
   color: white;
   background: #ef4444;

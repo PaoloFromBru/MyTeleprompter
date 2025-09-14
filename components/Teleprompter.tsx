@@ -648,7 +648,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       </div>
 
       {showMobileSettings && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center">
         <div className="card text-white p-4 w-11/12 max-w-sm space-y-3 bg-neutral-900/80">
             <label className="flex items-center gap-2">
               <span className="whitespace-nowrap">Font size</span>
@@ -715,19 +715,25 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           <div className="flex items-center gap-1 whitespace-nowrap">
             <button
               onClick={() => nudgeByViewport(-1)}
-              className="btn btn-secondary text-xs"
+              className="btn btn-secondary"
               title={ui.nudgeBackTitle}
               type="button"
+              aria-label={ui.nudgeBackTitle}
             >
-              ⬆︎
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15"/>
+              </svg>
             </button>
             <button
               onClick={() => nudgeByViewport(1)}
-              className="btn btn-secondary text-xs"
+              className="btn btn-secondary"
               title={ui.nudgeForwardTitle}
               type="button"
+              aria-label={ui.nudgeForwardTitle}
             >
-              ⬇︎
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
             </button>
             <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
             <button

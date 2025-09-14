@@ -8,7 +8,7 @@ export default function TopNav() {
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   const pathname = usePathname();
-  const linkClass = (path: string) => `btn text-sm ${pathname === path ? "btn-secondary" : "btn-ghost"}`;
+  const linkClass = (path: string) => `btn btn-nav text-sm ${pathname === path ? "btn-nav-active" : ""}`;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -54,7 +54,7 @@ export default function TopNav() {
         </nav>
       </div>
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center text-xl text-white space-y-6">
+        <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center text-xl text-white space-y-6">
           <button
             onClick={toggle}
             aria-label="Close menu"
