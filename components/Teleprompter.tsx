@@ -531,11 +531,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   return (
     <div className="w-full mx-auto max-w-3xl pb-16">
       {/* Mobile compact toolbar */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-800 text-white flex items-center justify-between gap-2 p-2">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-900/90 backdrop-blur border-t border-white/10 text-white flex items-center justify-between gap-2 p-2">
         <div className="flex items-center gap-1">
           <button
             onClick={permission !== "granted" ? start : (listening ? stop : start)}
-            className={`p-2 rounded ${listening ? "bg-sky-600 hover:bg-sky-500" : "bg-emerald-600 hover:bg-emerald-500"} text-white`}
+            className={`btn ${listening ? "btn-primary" : "btn-primary"}`}
             aria-label={permission !== "granted" ? ui.micEnable : (listening ? ui.stop : ui.start)}
             title={permission !== "granted" ? ui.micEnable : (listening ? ui.stop : ui.start)}
             disabled={isClient ? micSupported === false : undefined}
@@ -549,7 +549,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           </button>
           <button
             onClick={reset}
-            className="p-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white"
+            className="btn btn-secondary"
             aria-label={ui.reset}
             title={ui.reset}
             type="button"
@@ -572,7 +572,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 }
               }
             }}
-            className="p-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white"
+            className="btn btn-secondary"
             aria-label="Fullscreen"
             title="Fullscreen"
             type="button"
@@ -589,7 +589,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div className="flex items-center gap-1">
           <button
             onClick={() => nudgeByViewport(-1)}
-            className="p-2 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+            className="btn btn-secondary"
             aria-label={ui.nudgeBackTitle}
             title={ui.nudgeBackTitle}
             type="button"
@@ -601,7 +601,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           </button>
           <button
             onClick={() => nudgeByViewport(1)}
-            className="p-2 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+            className="btn btn-secondary"
             aria-label={ui.nudgeForwardTitle}
             title={ui.nudgeForwardTitle}
             type="button"
@@ -615,7 +615,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div className="flex items-center gap-1">
           <button
             onClick={() => setAsrEnabled((v) => !v)}
-            className={`p-2 rounded text-white ${asrEnabled ? "bg-emerald-600 hover:bg-emerald-500" : "bg-neutral-600 hover:bg-neutral-500"}`}
+            className={`btn ${asrEnabled ? "btn-primary" : "btn-secondary"}`}
             aria-label={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
             title={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
             type="button"
@@ -633,7 +633,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           )}
           <button
             onClick={() => setShowMobileSettings((v) => !v)}
-            className="p-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white"
+            className="btn btn-secondary"
             aria-label={ui.settingsTitle}
             title={ui.settingsTitle}
             type="button"
@@ -649,7 +649,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
       {showMobileSettings && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
-          <div className="bg-neutral-800 text-white p-4 rounded w-11/12 max-w-sm space-y-3">
+        <div className="card text-white p-4 w-11/12 max-w-sm space-y-3 bg-neutral-900/80">
             <label className="flex items-center gap-2">
               <span className="whitespace-nowrap">Font size</span>
               <input
@@ -669,7 +669,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               <span>Base WPM</span>
               <input
                 type="number"
-                className="w-20 text-black rounded px-1"
+                className="w-20 input"
                 value={baseWpmState}
                 onChange={(e) => setBaseWpmState(Number(e.target.value))}
               />
@@ -680,7 +680,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             </label>
             <div className="text-right pt-2">
               <button
-                className="px-3 py-1 rounded bg-emerald-600 text-white"
+                className="btn btn-primary"
                 onClick={() => setShowMobileSettings(false)}
               >
                 Close
@@ -696,18 +696,18 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           {permission !== "granted" ? (
             <button
               onClick={start}
-              className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isClient ? micSupported === false : undefined}
               title={isClient && micSupported === false ? "Microphone API not supported" : undefined}
             >
               🎤 {ui.micEnable}
             </button>
           ) : (
-            <button onClick={listening ? stop : start} className="px-3 py-1 rounded bg-sky-600 hover:bg-sky-500 text-sm text-white">
+            <button onClick={listening ? stop : start} className="btn btn-primary text-sm">
               {listening ? `⏹ ${ui.stop}` : `▶️ ${ui.start}`}
             </button>
           )}
-          <button onClick={reset} className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-sm text-white">⟲ {ui.reset}</button>
+          <button onClick={reset} className="btn btn-secondary text-sm">⟲ {ui.reset}</button>
         </div>
         <div className="flex items-center gap-2 text-xs tabular-nums flex-wrap">
           <span className="inline-block max-w-[60vw] truncate">WPM: <b>{Math.round(wpm)}</b> • {talking ? ui.statusSpeaking : ui.statusPaused} • {ui.pxWord}: {pxPerWord.toFixed(1)}</span>
@@ -715,7 +715,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           <div className="flex items-center gap-1 whitespace-nowrap">
             <button
               onClick={() => nudgeByViewport(-1)}
-              className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+              className="btn btn-secondary text-xs"
               title={ui.nudgeBackTitle}
               type="button"
             >
@@ -723,7 +723,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             </button>
             <button
               onClick={() => nudgeByViewport(1)}
-              className="px-2 py-0.5 rounded bg-neutral-600 hover:bg-neutral-500 text-white"
+              className="btn btn-secondary text-xs"
               title={ui.nudgeForwardTitle}
               type="button"
             >
@@ -732,7 +732,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
             <button
               onClick={() => setAsrEnabled((v) => !v)}
-              className={`px-2 py-0.5 rounded text-white ${asrEnabled ? "bg-emerald-600 hover:bg-emerald-500" : "bg-neutral-600 hover:bg-neutral-500"}`}
+              className={`btn text-xs ${asrEnabled ? "btn-primary" : "btn-secondary"}`}
               title={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
               type="button"
               disabled={!asrSupported}

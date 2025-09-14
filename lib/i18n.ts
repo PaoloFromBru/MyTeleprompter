@@ -57,7 +57,7 @@ export const messages: Record<UILang, {
   debugOverlayLabel: string;
 }> = {
   en: {
-    title: "Adaptive teleprompter (closed-loop)",
+    title: "Adaptive teleprompter",
     loadDemo: "Load demo",
     langLabel: "Lang",
     micEnable: "Enable microphone",
@@ -108,7 +108,7 @@ export const messages: Record<UILang, {
     debugOverlayLabel: "Debug overlay",
   },
   it: {
-    title: "Teleprompter adattivo (feedback chiuso)",
+    title: "Teleprompter adattivo",
     loadDemo: "Carica demo",
     langLabel: "Lingua",
     micEnable: "Attiva microfono",

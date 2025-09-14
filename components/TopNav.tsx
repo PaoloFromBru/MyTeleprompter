@@ -2,10 +2,13 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
+import { usePathname } from "next/navigation";
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
+  const pathname = usePathname();
+  const linkClass = (path: string) => `btn text-sm ${pathname === path ? "btn-secondary" : "btn-ghost"}`;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -28,10 +31,11 @@ export default function TopNav() {
           </Link>
           <div className="flex items-center gap-1 md:gap-2">
             <div className="hidden md:flex items-center gap-1">
-              <Link className="btn btn-ghost text-sm" href="/settings">Settings</Link>
-              <Link className="btn btn-ghost text-sm" href="/help">Help</Link>
-              <Link className="btn btn-ghost text-sm" href="/about">About</Link>
-              <Link className="btn btn-ghost text-sm" href="/library">Library</Link>
+              <Link className={linkClass("/")} href="/">Home</Link>
+              <Link className={linkClass("/settings")} href="/settings">Settings</Link>
+              <Link className={linkClass("/help")} href="/help">Help</Link>
+              <Link className={linkClass("/about")} href="/about">About</Link>
+              <Link className={linkClass("/library")} href="/library">Library</Link>
             </div>
             <ThemeToggle />
             <button
@@ -62,11 +66,11 @@ export default function TopNav() {
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
-          <Link className="hover:underline" href="/" onClick={() => setOpen(false)}>Home</Link>
-          <Link className="hover:underline" href="/settings" onClick={() => setOpen(false)}>Settings</Link>
-          <Link className="hover:underline" href="/help" onClick={() => setOpen(false)}>Help</Link>
-          <Link className="hover:underline" href="/about" onClick={() => setOpen(false)}>About</Link>
-          <Link className="hover:underline" href="/library" onClick={() => setOpen(false)}>Library</Link>
+          <Link className={`hover:underline ${pathname === "/" ? "underline font-medium" : ""}`} href="/" onClick={() => setOpen(false)}>Home</Link>
+          <Link className={`hover:underline ${pathname === "/settings" ? "underline font-medium" : ""}`} href="/settings" onClick={() => setOpen(false)}>Settings</Link>
+          <Link className={`hover:underline ${pathname === "/help" ? "underline font-medium" : ""}`} href="/help" onClick={() => setOpen(false)}>Help</Link>
+          <Link className={`hover:underline ${pathname === "/about" ? "underline font-medium" : ""}`} href="/about" onClick={() => setOpen(false)}>About</Link>
+          <Link className={`hover:underline ${pathname === "/library" ? "underline font-medium" : ""}`} href="/library" onClick={() => setOpen(false)}>Library</Link>
         </div>
       )}
     </header>
