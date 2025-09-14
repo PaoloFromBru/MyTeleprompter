@@ -23,9 +23,25 @@ export default function Home() {
     asrLeadWords: 2,
     lockToHighlight: false,
     showDebug: false,
+    theme: "light" as "light"|"dark"|"sepia"|"contrast",
+    fontFamily: "sans" as "sans"|"serif",
   });
   const [samples, setSamples] = useState<SampleTexts>({});
   const [text, setText] = useState("");
+  const saveScript = () => {
+    const title = prompt("Title for this script?");
+    if (!title) return;
+    try {
+      const raw = localStorage.getItem("tp:scripts");
+      const arr = raw ? JSON.parse(raw) : [];
+      arr.push({ id: Date.now(), title, text });
+      localStorage.setItem("tp:scripts", JSON.stringify(arr));
+      alert("Saved");
+    } catch (err) {
+      console.error("Failed to save script", err);
+    }
+  };
+  const [showOnboard, setShowOnboard] = useState(false);
   const stripBlankLines = (s: string) => s.split(/\r?\n/).filter((ln) => ln.trim() !== "").join("\n");
   const fetchSample = useCallback(async (l: "it" | "en") => {
     try {
@@ -57,7 +73,14 @@ export default function Home() {
     } catch (err) {
       console.error("Failed to load settings", err);
     }
-    fetchSample("it").then(setText);
+    try {
+      const cur = localStorage.getItem("tp:currentScript");
+      if (cur) setText(cur);
+      else fetchSample("it").then(setText);
+      if (!localStorage.getItem("tp:onboarded")) setShowOnboard(true);
+    } catch {
+      fetchSample("it").then(setText);
+    }
     setLoaded(true);
   }, [fetchSample]);
   const ui = messages[normalizeUILang(lang)];
@@ -81,6 +104,18 @@ export default function Home() {
       console.error("Failed to save settings", err);
     }
   }, [settings, loaded]);
+  useEffect(() => {
+    try { localStorage.setItem("tp:currentScript", text); } catch {}
+  }, [text]);
+
+  useEffect(() => {
+    const themes = ["theme-light","theme-dark","theme-sepia","theme-contrast"];
+    document.body.classList.remove(...themes);
+    document.body.classList.add(`theme-${settings.theme}`);
+    const fonts = ["font-sans","font-serif"];
+    document.body.classList.remove(...fonts);
+    document.body.classList.add(`font-${settings.fontFamily}`);
+  }, [settings.theme, settings.fontFamily]);
 
   // Keyboard shortcuts at page level: m (mirror), +/- (font size)
   useEffect(() => {
@@ -124,6 +159,13 @@ export default function Home() {
         >
           {ui.loadDemo}
         </button>
+        <button
+          className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300 text-sm"
+          onClick={saveScript}
+          type="button"
+        >
+          Save
+        </button>
       </div>
       {/* Minimal header controls moved to Settings page */}
 
@@ -144,6 +186,22 @@ export default function Home() {
         lockToHighlight={settings.lockToHighlight}
         showDebug={settings.showDebug}
       />
+      {showOnboard && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6 text-white text-center">
+          <div className="bg-neutral-800 p-6 rounded max-w-md">
+            <p className="mb-4">Allow microphone access and use the controls below to start or stop the teleprompter.</p>
+            <button
+              className="px-3 py-1 rounded bg-emerald-600"
+              onClick={() => {
+                setShowOnboard(false);
+                try { localStorage.setItem("tp:onboarded", "1"); } catch {}
+              }}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
