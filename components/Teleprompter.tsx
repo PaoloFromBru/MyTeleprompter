@@ -39,6 +39,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [showDebug, setShowDebug] = useState<boolean>(pShowDebug ?? false);
   const [useMicWhileASRState, setUseMicWhileASR] = useState(useMicWhileASR);
   const [useAsrDerivedDriftState, setUseAsrDerivedDrift] = useState(useAsrDerivedDrift);
+  const [fontSize, setFontSize] = useState(fontSizePx ?? 32);
+  const [mirrorState, setMirrorState] = useState(mirror);
+  const [baseWpmState, setBaseWpmState] = useState(baseWpm);
   useEffect(() => setUseMicWhileASR(useMicWhileASR), [useMicWhileASR]);
   useEffect(() => setUseAsrDerivedDrift(useAsrDerivedDrift), [useAsrDerivedDrift]);
   useEffect(() => setAsrWindowScreens(pAsrWindowScreens ?? 1), [pAsrWindowScreens]);
@@ -47,6 +50,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => setAsrLeadWords(pAsrLeadWords ?? 2), [pAsrLeadWords]);
   useEffect(() => setLockToHighlight(pLockToHighlight ?? false), [pLockToHighlight]);
   useEffect(() => setShowDebug(pShowDebug ?? false), [pShowDebug]);
+  useEffect(() => setFontSize(fontSizePx ?? 32), [fontSizePx]);
+  useEffect(() => setMirrorState(mirror), [mirror]);
+  useEffect(() => setBaseWpmState(baseWpm), [baseWpm]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
   const wordElsRef = useRef<Array<HTMLSpanElement | null>>([]);
@@ -100,7 +106,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       clearTimeout(id);
       window.removeEventListener("resize", calc);
     };
-  }, [text, totalWords, fontSizePx]);
+  }, [text, totalWords, fontSize]);
 
   // Compute ASR search window based on viewport size and setting (in tokens)
   const viewportWords = useMemo(() => {
@@ -310,7 +316,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       const allowDrift = !(asrEnabled && lockToHighlight);
       if (allowDrift) {
         if (talkingRef.current) next += wordsPerSec * dt;
-        else if (!holdOnSilence) next += (0.15 * (baseWpm / 60)) * dt;
+        else if (!holdOnSilence) next += (0.15 * (baseWpmState / 60)) * dt;
       }
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
@@ -473,7 +479,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords, useAsrDerivedDriftState]);
+  }, [baseWpmState, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords, useAsrDerivedDriftState]);
 
   // Periodically refresh overlay
   const [, setOverlayTick] = useState(0);
@@ -523,9 +529,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   }, [listening, permission, start, stop, pxPerWord, totalWords, nudgeByViewport]);
 
   return (
-    <div className="w-full mx-auto max-w-3xl">
+    <div className="w-full mx-auto max-w-3xl pb-16">
       {/* Mobile compact toolbar */}
-      <div className="flex sm:hidden items-center justify-between mb-2 gap-2 h-[44px]">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-800 text-white flex items-center justify-between gap-2 p-2">
         <div className="flex items-center gap-1">
           <button
             onClick={permission !== "granted" ? start : (listening ? stop : start)}
@@ -641,7 +647,48 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         </div>
       </div>
 
-      {false && showMobileSettings && (<div />)}
+      {showMobileSettings && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+          <div className="bg-neutral-800 text-white p-4 rounded w-11/12 max-w-sm space-y-3">
+            <label className="flex items-center gap-2">
+              <span className="whitespace-nowrap">Font size</span>
+              <input
+                type="range"
+                min={20}
+                max={72}
+                value={fontSize}
+                onChange={(e) => setFontSize(Number(e.target.value))}
+              />
+              <span className="w-10 text-right tabular-nums">{fontSize}px</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={mirrorState} onChange={(e) => setMirrorState(e.target.checked)} />
+              <span>Mirror</span>
+            </label>
+            <label className="flex items-center justify-between">
+              <span>Base WPM</span>
+              <input
+                type="number"
+                className="w-20 text-black rounded px-1"
+                value={baseWpmState}
+                onChange={(e) => setBaseWpmState(Number(e.target.value))}
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={asrEnabled} onChange={(e) => setAsrEnabled(e.target.checked)} />
+              <span>ASR follow</span>
+            </label>
+            <div className="text-right pt-2">
+              <button
+                className="px-3 py-1 rounded bg-emerald-600 text-white"
+                onClick={() => setShowMobileSettings(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Desktop toolbar */}
       <div className="hidden sm:flex flex-wrap items-start justify-between mb-3 gap-2 min-h-[44px]">
@@ -710,7 +757,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div
           ref={contentRef}
           className="text-2xl md:text-3xl whitespace-pre-wrap select-none"
-          style={{ fontSize: fontSizePx, transform: mirror ? "scaleX(-1)" : undefined }}
+          style={{ fontSize, transform: mirrorState ? "scaleX(-1)" : undefined }}
         >
           {useMemo(() => {
             // Render text preserving whitespace, wrapping word-like chunks for highlighting and anchoring

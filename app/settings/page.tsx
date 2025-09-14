@@ -19,6 +19,8 @@ export default function SettingsPage() {
     asrLeadWords: 2,
     lockToHighlight: false,
     showDebug: false,
+    theme: "light" as "light"|"dark"|"sepia"|"contrast",
+    fontFamily: "sans" as "sans"|"serif",
   });
   const ui = messages[normalizeUILang(lang)];
 
@@ -35,6 +37,14 @@ export default function SettingsPage() {
   }, []);
   useEffect(() => { if (!loaded) return; try { localStorage.setItem("tp:lang", lang); } catch {} }, [lang, loaded]);
   useEffect(() => { if (!loaded) return; try { localStorage.setItem("tp:settings", JSON.stringify(settings)); } catch {} }, [settings, loaded]);
+  useEffect(() => {
+    const themes = ["theme-light","theme-dark","theme-sepia","theme-contrast"];
+    document.body.classList.remove(...themes);
+    document.body.classList.add(`theme-${settings.theme}`);
+    const fonts = ["font-sans","font-serif"];
+    document.body.classList.remove(...fonts);
+    document.body.classList.add(`font-${settings.fontFamily}`);
+  }, [settings.theme, settings.fontFamily]);
 
   return (
     <div className="py-6 space-y-6">
@@ -49,6 +59,32 @@ export default function SettingsPage() {
           >
             <option value="it-IT">Italiano (it-IT)</option>
             <option value="en-US">English (en-US)</option>
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span>Theme</span>
+          <select
+            className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            value={settings.theme}
+            onChange={(e) => setSettings((s) => ({ ...s, theme: e.target.value as "light"|"dark"|"sepia"|"contrast" }))}
+          >
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="sepia">Sepia</option>
+            <option value="contrast">High Contrast</option>
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span>Font</span>
+          <select
+            className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            value={settings.fontFamily}
+            onChange={(e) => setSettings((s) => ({ ...s, fontFamily: e.target.value as "sans"|"serif" }))}
+          >
+            <option value="sans">Sans</option>
+            <option value="serif">Serif</option>
           </select>
         </label>
 
