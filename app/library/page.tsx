@@ -24,15 +24,15 @@ export default function LibraryPage() {
   };
   return (
     <div className="py-6 space-y-4">
-      <h1 className="text-xl font-semibold">Script Library</h1>
+      <h1 className="text-2xl font-semibold">Script Library</h1>
       {scripts.length === 0 && <p>No saved scripts.</p>}
       <ul className="space-y-2">
         {scripts.map((s) => (
-          <li key={s.id} className="flex items-center justify-between bg-neutral-100 dark:bg-neutral-800 rounded px-3 py-2">
-            <span>{s.title}</span>
+          <li key={s.id} className="card px-4 py-3 flex items-center justify-between">
+            <span className="font-medium">{s.title}</span>
             <div className="flex gap-2">
-              <button className="px-2 py-1 text-sm rounded bg-emerald-600 text-white" onClick={() => load(s)}>Load</button>
-              <button className="px-2 py-1 text-sm rounded bg-red-600 text-white" onClick={() => remove(s.id)}>Delete</button>
+              <button className="btn btn-primary text-sm" onClick={() => load(s)}>Load</button>
+              <button className="btn btn-danger text-sm" onClick={() => remove(s.id)}>Delete</button>
             </div>
           </li>
         ))}

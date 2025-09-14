@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import ThemeToggle from "./ThemeToggle";
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
@@ -13,28 +14,41 @@ export default function TopNav() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   return (
-    <header className="sticky top-0 z-40 bg-white/80 dark:bg-neutral-950/80 backdrop-blur border-b">
-      <nav className="mx-auto max-w-5xl px-4 py-2 flex items-center justify-between">
-        <Link href="/" className="font-semibold">Teleprompter</Link>
-        <button
-          aria-label="Menu"
-          onClick={toggle}
-          className="p-2 rounded md:hidden hover:bg-neutral-200 dark:hover:bg-neutral-800"
-          type="button"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-        <div className="hidden md:flex items-center gap-3 text-sm">
-          <Link className="hover:underline" href="/settings">Settings</Link>
-          <Link className="hover:underline" href="/help">Help</Link>
-          <Link className="hover:underline" href="/about">About</Link>
-          <Link className="hover:underline" href="/library">Library</Link>
-        </div>
-      </nav>
+    <header className="sticky top-0 z-40">
+      <div className="bg-white/70 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 border-b">
+        <nav className="mx-auto max-w-5xl px-4 py-2.5 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 font-semibold">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 to-indigo-500 text-white shadow-sm">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="14" rx="2" />
+                <path d="M7 8h10M7 12h10M7 16h6" />
+              </svg>
+            </span>
+            <span>Teleprompter</span>
+          </Link>
+          <div className="flex items-center gap-1 md:gap-2">
+            <div className="hidden md:flex items-center gap-1">
+              <Link className="btn btn-ghost text-sm" href="/settings">Settings</Link>
+              <Link className="btn btn-ghost text-sm" href="/help">Help</Link>
+              <Link className="btn btn-ghost text-sm" href="/about">About</Link>
+              <Link className="btn btn-ghost text-sm" href="/library">Library</Link>
+            </div>
+            <ThemeToggle />
+            <button
+              aria-label="Menu"
+              onClick={toggle}
+              className="p-2 rounded md:hidden hover:bg-black/5 dark:hover:bg-white/10"
+              type="button"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </nav>
+      </div>
       {open && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center text-xl text-white space-y-6">
           <button

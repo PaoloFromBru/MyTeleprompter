@@ -11,21 +11,23 @@ export default function FileTextInput({ onLoadText, lang }: { onLoadText: (text:
     <div className="flex flex-wrap items-center gap-2 w-full">
       <input
         ref={fileRef}
+        id="file-input"
         type="file"
         accept=".txt,.md,.markdown,.rtf,.srt"
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) handleFile(f);
         }}
-        className="block text-sm max-w-full"
+        className="sr-only"
       />
       <button
-        className="px-3 py-2 rounded bg-neutral-700 hover:bg-neutral-600 text-white text-sm w-full sm:w-auto"
+        className="btn btn-secondary w-full sm:w-auto"
         onClick={() => fileRef.current?.click()}
         type="button"
       >
         {ui.fileLoadLabel}
       </button>
+      <span className="text-xs text-neutral-600 dark:text-neutral-400">TXT, MD, RTF, SRT</span>
     </div>
   );
 }

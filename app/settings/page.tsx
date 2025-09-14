@@ -48,12 +48,12 @@ export default function SettingsPage() {
 
   return (
     <div className="py-6 space-y-6">
-      <h1 className="text-xl font-semibold">{ui.settingsTitle}</h1>
+      <h1 className="text-2xl font-semibold">{ui.settingsTitle}</h1>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex items-center gap-2">
           <span>{ui.langLabel}</span>
           <select
-            className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            className="select"
             value={lang}
             onChange={(e) => setLang(e.target.value)}
           >
@@ -65,7 +65,7 @@ export default function SettingsPage() {
         <label className="flex items-center gap-2">
           <span>Theme</span>
           <select
-            className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            className="select"
             value={settings.theme}
             onChange={(e) => setSettings((s) => ({ ...s, theme: e.target.value as "light"|"dark"|"sepia"|"contrast" }))}
           >
@@ -79,7 +79,7 @@ export default function SettingsPage() {
         <label className="flex items-center gap-2">
           <span>Font</span>
           <select
-            className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            className="select"
             value={settings.fontFamily}
             onChange={(e) => setSettings((s) => ({ ...s, fontFamily: e.target.value as "sans"|"serif" }))}
           >
@@ -98,7 +98,7 @@ export default function SettingsPage() {
         <label className="flex items-center gap-2">
           <span>ASR resume delay (ms)</span>
           <input type="number" min={0} max={3000} step={50}
-            className="w-24 bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            className="w-24 input"
             value={settings.manualPauseMs}
             onChange={(e) => setSettings((s) => ({ ...s, manualPauseMs: Number(e.target.value) }))} />
         </label>
@@ -112,7 +112,7 @@ export default function SettingsPage() {
         <label className="flex items-center gap-2">
           <span>{ui.baseWpmLabel}</span>
           <input type="number" min={60} max={260} step={5}
-            className="w-24 bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            className="w-24 input"
             value={settings.baseWpm}
             onChange={(e) => setSettings((s) => ({ ...s, baseWpm: Number(e.target.value) }))} />
         </label>
@@ -123,7 +123,7 @@ export default function SettingsPage() {
           <span>{ui.holdOnSilenceLabel}</span>
         </label>
 
-        <div className="col-span-full border-t pt-3 mt-1">
+        <div className="col-span-full section-sep">
           <div className="font-medium mb-2">Scrolling between ASR matches</div>
           <div className="flex flex-col gap-2 text-sm">
             <label className="inline-flex items-center gap-2">
@@ -146,13 +146,13 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="col-span-full border-t pt-3 mt-1">
+        <div className="col-span-full section-sep">
           <div className="font-medium mb-2">ASR visualization and snap</div>
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             <label className="inline-flex items-center gap-2">
               <span>{ui.asrWindowLabel}</span>
               <select
-                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+                className="select"
                 value={settings.asrWindowScreens}
                 onChange={(e) => setSettings((s) => ({ ...s, asrWindowScreens: Number(e.target.value) as 1|2|4 }))}
               >
@@ -165,7 +165,7 @@ export default function SettingsPage() {
             <label className="inline-flex items-center gap-2">
               <span>{ui.asrSnapMode}</span>
               <select
-                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+                className="select"
                 value={settings.asrSnapMode}
                 onChange={(e) => setSettings((s) => ({ ...s, asrSnapMode: (e.target.value as ("gentle"|"aggressive"|"instant"|"sticky")) }))}
               >
@@ -180,7 +180,7 @@ export default function SettingsPage() {
               <label className="inline-flex items-center gap-2">
                 <span>Threshold (px)</span>
                 <input type="number" min={4} max={48} step={2}
-                  className="w-20 bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+                  className="w-20 input"
                   value={settings.stickyThresholdPx}
                   onChange={(e) => setSettings((s) => ({ ...s, stickyThresholdPx: Number(e.target.value) }))}
                 />
@@ -190,7 +190,7 @@ export default function SettingsPage() {
             <label className="inline-flex items-center gap-2">
               <span>ASR lead</span>
               <select
-                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+                className="select"
                 value={settings.asrLeadWords}
                 onChange={(e) => setSettings((s) => ({ ...s, asrLeadWords: Number(e.target.value) }))}
               >

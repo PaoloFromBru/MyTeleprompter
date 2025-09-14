@@ -8,7 +8,7 @@ export default function HelpPage() {
   useEffect(() => { try { const l = localStorage.getItem("tp:lang"); if (l) setLang(l); } catch {} }, []);
   return (
     <div className="py-6 space-y-6">
-      <h1 className="text-xl font-semibold">{ui.helpTitle}</h1>
+      <h1 className="text-2xl font-semibold">{ui.helpTitle}</h1>
       <section>
         <h2 className="font-medium mb-1">{ui.helpShortcutsTitle}</h2>
         <ul className="list-disc pl-6 space-y-1 text-sm">
@@ -37,4 +37,3 @@ export default function HelpPage() {
     </div>
   );
 }
-
