@@ -9,6 +9,9 @@ export default function SettingsPage() {
     mirror: false,
     baseWpm: 140,
     holdOnSilence: true,
+    manualPauseMs: 500,
+    useMicWhileASR: true,
+    useAsrDerivedDrift: false,
   });
   const ui = messages[normalizeUILang(lang)];
 
@@ -47,6 +50,14 @@ export default function SettingsPage() {
         </label>
 
         <label className="flex items-center gap-2">
+          <span>ASR resume delay (ms)</span>
+          <input type="number" min={0} max={3000} step={50}
+            className="w-24 bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
+            value={settings.manualPauseMs}
+            onChange={(e) => setSettings((s) => ({ ...s, manualPauseMs: Number(e.target.value) }))} />
+        </label>
+
+        <label className="flex items-center gap-2">
           <input type="checkbox" checked={settings.mirror}
             onChange={(e) => setSettings((s) => ({ ...s, mirror: e.target.checked }))} />
           <span>{ui.mirrorModeLabel}</span>
@@ -65,9 +76,31 @@ export default function SettingsPage() {
             onChange={(e) => setSettings((s) => ({ ...s, holdOnSilence: e.target.checked }))} />
           <span>{ui.holdOnSilenceLabel}</span>
         </label>
+
+        <div className="col-span-full border-t pt-3 mt-1">
+          <div className="font-medium mb-2">Scrolling between ASR matches</div>
+          <div className="flex flex-col gap-2 text-sm">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.useMicWhileASR}
+                onChange={(e) => setSettings((s) => ({ ...s, useMicWhileASR: e.target.checked, useAsrDerivedDrift: e.target.checked ? false : s.useAsrDerivedDrift }))}
+              />
+              <span>Mic drift while ASR</span>
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.useAsrDerivedDrift}
+                onChange={(e) => setSettings((s) => ({ ...s, useAsrDerivedDrift: e.target.checked, useMicWhileASR: e.target.checked ? false : s.useMicWhileASR }))}
+              />
+              <span>ASR-derived drift (between matches)</span>
+            </label>
+            <p className="opacity-80">Only one can be active at a time. If both are off, the text advances only on ASR matches (or when unlocked, by base WPM during silence).</p>
+          </div>
+        </div>
       </div>
       <p className="text-sm opacity-80">These settings are saved locally and used by the teleprompter on the home page.</p>
     </div>
   );
 }
-

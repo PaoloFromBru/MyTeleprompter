@@ -10,11 +10,14 @@ type Props = {
   lang?: string;
   fontSizePx?: number;
   mirror?: boolean;
+  manualPauseMs?: number;
+  useMicWhileASR?: boolean;
+  useAsrDerivedDrift?: boolean;
 };
 
 import { messages, normalizeUILang } from "@/lib/i18n";
 
-export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang, fontSizePx, mirror = false }: Props) {
+export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang, fontSizePx, mirror = false, manualPauseMs = 500, useMicWhileASR = true, useAsrDerivedDrift = false }: Props) {
   const { start, stop, listening, permission, wpm, talking } = useMicSpeechRate({
     smoothingSecs: 1.6, minDbThreshold: -52, ema: 0.25,
   });
@@ -28,11 +31,27 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [lockToHighlight, setLockToHighlight] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
+  const [useMicWhileASRState, setUseMicWhileASR] = useState(useMicWhileASR);
+  const [useAsrDerivedDriftState, setUseAsrDerivedDrift] = useState(useAsrDerivedDrift);
+  useEffect(() => setUseMicWhileASR(useMicWhileASR), [useMicWhileASR]);
+  useEffect(() => setUseAsrDerivedDrift(useAsrDerivedDrift), [useAsrDerivedDrift]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
   const wordElsRef = useRef<Array<HTMLSpanElement | null>>([]);
   const caretRef = useRef<HTMLDivElement | null>(null);
+  const boundaryCaretRef = useRef<HTMLDivElement | null>(null);
   const manualScrollUntilRef = useRef<number>(0);
+  // Debug: last target info and recent events
+  const lastTargetPxRef = useRef(0);
+  const lastErrorPxRef = useRef(0);
+  const lastTargetModeRef = useRef<"fallback"|"anchor"|"sticky"|"instant">("fallback");
+  const debugEventsRef = useRef<string[]>([]);
+  const pushDebug = (msg: string) => {
+    const arr = debugEventsRef.current;
+    const ts = Math.round(performance.now());
+    arr.push(`${ts}ms ${msg}`);
+    if (arr.length > 30) arr.splice(0, arr.length - 30);
+  };
 
   const words = useMemo(() =>
     text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean), [text]
@@ -146,11 +165,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       speechIdxRef.current = matchedIndex;
     }
   }, [matchedIndex, pxPerWord, asrWindowScreens, tokenToWordRatio, totalWords]);
-  // On Android Chrome, ASR and WebAudio may contend for the mic.
-  // If ASR is enabled while mic listening, stop the mic to avoid conflicts.
+  // Optionally stop mic when ASR is on (if the user disables concurrent mic)
   useEffect(() => {
-    if (asrEnabled && listening) stop();
-  }, [asrEnabled, listening, stop]);
+    if (asrEnabled && listening && !useMicWhileASRState) stop();
+  }, [asrEnabled, listening, stop, useMicWhileASRState]);
   const [recentAsr, setRecentAsr] = useState(false);
   useEffect(() => {
     const id = setInterval(() => {
@@ -158,6 +176,26 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     }, 400);
     return () => clearInterval(id);
   }, [lastMatchAt]);
+
+  // ASR-derived drift (words/sec estimated from recent ASR matches)
+  const asrDriftWpsRef = useRef(0);
+  const lastAsrIdxRef = useRef<number | null>(null);
+  const lastAsrTsRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (matchedIndex == null || !lastMatchAt) return;
+    const now = lastMatchAt;
+    const lastIdx = lastAsrIdxRef.current;
+    const lastTs = lastAsrTsRef.current;
+    if (lastIdx != null && lastTs != null && now > lastTs && matchedIndex >= lastIdx) {
+      const dt = (now - lastTs) / 1000;
+      const dTokens = matchedIndex - lastIdx;
+      const dWords = dTokens * tokenToWordRatio;
+      const inst = Math.max(0, Math.min(6, dWords / Math.max(1e-3, dt)));
+      asrDriftWpsRef.current = 0.6 * inst + 0.4 * asrDriftWpsRef.current;
+    }
+    lastAsrIdxRef.current = matchedIndex;
+    lastAsrTsRef.current = now;
+  }, [matchedIndex, lastMatchAt, tokenToWordRatio, useAsrDerivedDriftState]);
 
   // no-op effect for debug now
 
@@ -190,29 +228,32 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     }
   }, []);
 
-  // Detect manual user scrolling (wheel/touch/scroll) and pause auto-follow briefly
+  // Detect manual user scrolling (wheel/touch) and pause auto-follow briefly
   useEffect(() => {
     const cont = containerRef.current;
     if (!cont) return;
-    const bump: EventListener = () => { manualScrollUntilRef.current = performance.now() + 120; };
-    cont.addEventListener('wheel', bump, { passive: true });
-    cont.addEventListener('touchstart', bump, { passive: true });
-    cont.addEventListener('touchmove', bump, { passive: true });
-    cont.addEventListener('scroll', bump, { passive: true });
-    return () => {
-      cont.removeEventListener('wheel', bump);
-      cont.removeEventListener('touchstart', bump);
-      cont.removeEventListener('touchmove', bump);
-      cont.removeEventListener('scroll', bump);
+    const bump = (ev: Event) => {
+      manualScrollUntilRef.current = performance.now() + manualPauseMs;
+      pushDebug(`manual ${ev.type}`);
     };
-  }, []);
+    cont.addEventListener('wheel', bump as EventListener, { passive: true });
+    cont.addEventListener('touchstart', bump as EventListener, { passive: true });
+    cont.addEventListener('touchmove', bump as EventListener, { passive: true });
+    return () => {
+      cont.removeEventListener('wheel', bump as EventListener);
+      cont.removeEventListener('touchstart', bump as EventListener);
+      cont.removeEventListener('touchmove', bump as EventListener);
+    };
+  }, [manualPauseMs]);
 
   const nudgeByViewport = useCallback((sign: 1 | -1) => {
     const cont = containerRef.current;
     const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
     wordsReadRef.current = Math.max(0, Math.min(totalWords, wordsReadRef.current + sign * deltaWords));
     integratorRef.current = 0;
-  }, [pxPerWord, totalWords]);
+    manualScrollUntilRef.current = performance.now() + manualPauseMs;
+    pushDebug(`manual nudge ${sign}`);
+  }, [pxPerWord, totalWords, manualPauseMs]);
   // Keep lockToHighlight consistent with ASR state
   useEffect(() => {
     if (!asrEnabled && lockToHighlight) setLockToHighlight(false);
@@ -236,7 +277,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       const dt = (now - lastTsRef.current) / 1000;
       lastTsRef.current = now;
 
-      const wordsPerSec = (wpmRef.current || 0) / 60;
+      const wordsPerSec = (asrEnabled && useAsrDerivedDriftState) ? asrDriftWpsRef.current : ((wpmRef.current || 0) / 60);
       let next = wordsReadRef.current;
       const allowDrift = !(asrEnabled && lockToHighlight);
       if (allowDrift) {
@@ -324,18 +365,34 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           wordsReadRef.current = Math.max(0, asrTargetWords + backStep);
           overrideTarget = null;
         }
-        // Position caret horizontally over target word
+        // Always compute pixel anchor for target word so minor drift cannot accumulate
         const cont3 = containerRef.current;
         const caret = caretRef.current;
-        if (caret && cont3) {
-          const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
-          const el = wordElsRef.current[idx];
-          if (el) {
-            const contRect = cont3.getBoundingClientRect();
-            const elRect = el.getBoundingClientRect();
-            const left = (elRect.left - contRect.left) + elRect.width / 2;
-            caret.style.left = `${Math.round(left)}px`;
+        const boundaryCaret = boundaryCaretRef.current;
+        const idxForPx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+        const elForPx = wordElsRef.current[idxForPx];
+        if (cont3 && elForPx) {
+          const contRect = cont3.getBoundingClientRect();
+          const elRect = elForPx.getBoundingClientRect();
+          const left = (elRect.left - contRect.left) + elRect.width / 2;
+          if (caret) caret.style.left = `${Math.round(left)}px`;
+          // Boundary caret at end of green text (last highlighted word)
+          if (boundaryCaret && highlightWordsRef.current > 0) {
+            const bIdx = Math.min(totalWords - 1, Math.max(0, highlightWordsRef.current - 1));
+            const bel = wordElsRef.current[bIdx];
+            if (bel) {
+              const bRect = bel.getBoundingClientRect();
+              const bLeft = (bRect.left - contRect.left) + bRect.width / 2;
+              boundaryCaret.style.left = `${Math.round(bLeft)}px`;
+            }
           }
+          const pixelAnchor = Math.max(0,
+            Math.min(
+              cont3.scrollHeight - cont3.clientHeight,
+              elForPx.offsetTop - cont3.clientHeight * ANCHOR_RATIO
+            )
+          );
+          if (overrideTarget == null) overrideTarget = pixelAnchor;
         }
       }
 
@@ -354,6 +411,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           )
         );
         const target = overrideTarget ?? fallbackTarget;
+        // Update debug metrics and decide mode label
+        const modeLabel: "anchor" | "fallback" = overrideTarget != null ? "anchor" : "fallback";
+        lastTargetPxRef.current = target;
+        lastErrorPxRef.current = target - cont.scrollTop;
+        let modeFinal: "fallback"|"anchor"|"sticky"|"instant" = modeLabel;
+        if (asrSnapMode === "sticky") modeFinal = "sticky";
+        else if (asrSnapMode === "instant") modeFinal = "instant";
+        lastTargetModeRef.current = modeFinal;
         // Sticky snap: if drift from target exceeds threshold, snap instantly
         if (asrSnapMode === "sticky") {
           const err = target - cont.scrollTop;
@@ -380,7 +445,15 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords]);
+  }, [baseWpm, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords, useAsrDerivedDriftState]);
+
+  // Periodically refresh overlay
+  const [, setOverlayTick] = useState(0);
+  useEffect(() => {
+    if (!showDebug) return;
+    const id = setInterval(() => setOverlayTick((v) => v + 1), 300);
+    return () => clearInterval(id);
+  }, [showDebug]);
 
   // Keyboard shortcuts: space(start/stop), up/down(nudge), f(fullscreen)
   useEffect(() => {
@@ -735,6 +808,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             <label className="ml-2 inline-flex items-center gap-1">
               <input
                 type="checkbox"
+                checked={useMicWhileASR}
+                onChange={(e) => setUseMicWhileASR(e.target.checked)}
+              />
+              <span>Mic drift while ASR</span>
+            </label>
+            <label className="ml-2 inline-flex items-center gap-1">
+              <input
+                type="checkbox"
                 checked={showDebug}
                 onChange={(e) => setShowDebug(e.target.checked)}
               />
@@ -801,6 +882,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         >
           <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-emerald-400 drop-shadow-[0_0_6px_rgba(16,185,129,0.7)]" />
         </div>
+        {/* Orange caret at end of highlighted text */}
+        <div
+          ref={boundaryCaretRef}
+          className="pointer-events-none absolute z-20"
+          style={{ top: `${ANCHOR_RATIO * 100}%`, transform: "translate(-50%, 6px)" }}
+        >
+          <div className="w-0 h-0 border-l-4 border-r-4 border-t-8 border-l-transparent border-r-transparent border-t-orange-400 drop-shadow-[0_0_6px_rgba(251,146,60,0.7)]" />
+        </div>
       </div>
       {asrEnabled && (
         <div className="mt-2 text-xs opacity-80">
@@ -809,12 +898,19 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         </div>
       )}
       {showDebug && (
-        <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1">
+        <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1 max-w-[46vw]">
           <div><b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
           <div><b>idx</b>: {matchedIndex ?? "-"} • <b>seen</b>: {highlightWords}</div>
           <div><b>wordsRead</b>: {Math.round(wordsReadRef.current)}</div>
           <div><b>windowTokens</b>: {dynamicWindowTokens} • <b>viewportWords</b>: {Math.round(viewportWords)}</div>
           <div><b>px/word</b>: {pxPerWord.toFixed(2)} • <b>recentASR</b>: {String(recentAsr)}</div>
+          <div><b>target</b>: {Math.round(lastTargetPxRef.current)} • <b>errorPx</b>: {Math.round(lastErrorPxRef.current)} • <b>mode</b>: {lastTargetModeRef.current}</div>
+          <div><b>manualPause</b>: {Math.max(0, Math.round(manualScrollUntilRef.current - performance.now()))} ms</div>
+          <div className="mt-1 border-t border-white/20 pt-1 font-mono leading-snug whitespace-pre-wrap break-words max-h-[30vh] overflow-auto">
+            {debugEventsRef.current.slice(-20).map((e, i) => (
+              <div key={i}>{e}</div>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -13,6 +13,9 @@ export default function Home() {
     mirror: false,
     baseWpm: 140,
     holdOnSilence: true,
+    manualPauseMs: 500,
+    useMicWhileASR: true,
+    useAsrDerivedDrift: false,
   });
   const [samples, setSamples] = useState<SampleTexts>({});
   const [text, setText] = useState("");
@@ -119,6 +122,9 @@ export default function Home() {
         lang={lang}
         fontSizePx={settings.fontSizePx}
         mirror={settings.mirror}
+        manualPauseMs={settings.manualPauseMs}
+        useMicWhileASR={settings.useMicWhileASR}
+        useAsrDerivedDrift={settings.useAsrDerivedDrift}
       />
     </main>
   );
