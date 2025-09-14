@@ -337,9 +337,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       }
 
       let overrideTarget: number | null = null;
+      let anchorWordsForHighlight: number | null = null; // align green highlight to anchor when ASR drives
       if (speechIdxRef.current != null) {
         const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
         const asrTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
+        anchorWordsForHighlight = Math.round(asrTargetWords);
         const diff = asrTargetWords - wordsReadRef.current;
         if (diff > 0.1) {
           if (asrSnapMode === "aggressive") {
@@ -430,7 +432,11 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         }
       }
 
-      const newHighlight = Math.min(recognizedWords, Math.round(wordsReadRef.current));
+      // Align highlight to the anchor line when ASR is driving the scroll
+      const desiredHighlight = (asrEnabled && anchorWordsForHighlight != null)
+        ? anchorWordsForHighlight
+        : Math.round(wordsReadRef.current);
+      const newHighlight = Math.max(0, Math.min(totalWords, desiredHighlight));
       if (newHighlight !== highlightWordsRef.current) {
         highlightWordsRef.current = newHighlight;
         setHighlightWords(newHighlight);
