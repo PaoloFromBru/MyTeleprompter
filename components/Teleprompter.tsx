@@ -13,34 +13,47 @@ type Props = {
   manualPauseMs?: number;
   useMicWhileASR?: boolean;
   useAsrDerivedDrift?: boolean;
+  asrWindowScreens?: 1 | 2 | 4;
+  asrSnapMode?: "gentle" | "aggressive" | "instant" | "sticky";
+  stickyThresholdPx?: number;
+  asrLeadWords?: number;
+  lockToHighlight?: boolean;
+  showDebug?: boolean;
 };
 
 import { messages, normalizeUILang } from "@/lib/i18n";
 
-export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang, fontSizePx, mirror = false, manualPauseMs = 500, useMicWhileASR = true, useAsrDerivedDrift = false }: Props) {
+export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang, fontSizePx, mirror = false, manualPauseMs = 500, useMicWhileASR = true, useAsrDerivedDrift = false, asrWindowScreens: pAsrWindowScreens, asrSnapMode: pAsrSnapMode, stickyThresholdPx: pStickyThresholdPx, asrLeadWords: pAsrLeadWords, lockToHighlight: pLockToHighlight, showDebug: pShowDebug }: Props) {
   const { start, stop, listening, permission, wpm, talking } = useMicSpeechRate({
     smoothingSecs: 1.6, minDbThreshold: -52, ema: 0.25,
   });
   const ANCHOR_RATIO = 0.35; // keep target ~35% from top
   const ui = messages[normalizeUILang(lang)];
   const [asrEnabled, setAsrEnabled] = useState(false);
-  const [asrWindowScreens, setAsrWindowScreens] = useState<1 | 2 | 4>(1);
-  const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive" | "instant" | "sticky">("aggressive");
-  const [stickyThresholdPx, setStickyThresholdPx] = useState<number>(16);
-  const [asrLeadWords, setAsrLeadWords] = useState<number>(2);
+  const [asrWindowScreens, setAsrWindowScreens] = useState<1 | 2 | 4>(pAsrWindowScreens ?? 1);
+  const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive" | "instant" | "sticky">(pAsrSnapMode ?? "aggressive");
+  const [stickyThresholdPx, setStickyThresholdPx] = useState<number>(pStickyThresholdPx ?? 16);
+  const [asrLeadWords, setAsrLeadWords] = useState<number>(pAsrLeadWords ?? 2);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
-  const [lockToHighlight, setLockToHighlight] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
+  const [lockToHighlight, setLockToHighlight] = useState<boolean>(pLockToHighlight ?? false);
+  const [showDebug, setShowDebug] = useState<boolean>(pShowDebug ?? false);
   const [useMicWhileASRState, setUseMicWhileASR] = useState(useMicWhileASR);
   const [useAsrDerivedDriftState, setUseAsrDerivedDrift] = useState(useAsrDerivedDrift);
   useEffect(() => setUseMicWhileASR(useMicWhileASR), [useMicWhileASR]);
   useEffect(() => setUseAsrDerivedDrift(useAsrDerivedDrift), [useAsrDerivedDrift]);
+  useEffect(() => setAsrWindowScreens(pAsrWindowScreens ?? 1), [pAsrWindowScreens]);
+  useEffect(() => setAsrSnapMode(pAsrSnapMode ?? "aggressive"), [pAsrSnapMode]);
+  useEffect(() => setStickyThresholdPx(pStickyThresholdPx ?? 16), [pStickyThresholdPx]);
+  useEffect(() => setAsrLeadWords(pAsrLeadWords ?? 2), [pAsrLeadWords]);
+  useEffect(() => setLockToHighlight(pLockToHighlight ?? false), [pLockToHighlight]);
+  useEffect(() => setShowDebug(pShowDebug ?? false), [pShowDebug]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const contentRef   = useRef<HTMLDivElement | null>(null);
   const wordElsRef = useRef<Array<HTMLSpanElement | null>>([]);
   const caretRef = useRef<HTMLDivElement | null>(null);
   const boundaryCaretRef = useRef<HTMLDivElement | null>(null);
   const manualScrollUntilRef = useRef<number>(0);
+  const lastManualBumpRef = useRef<number>(0);
   // Debug: last target info and recent events
   const lastTargetPxRef = useRef(0);
   const lastErrorPxRef = useRef(0);
@@ -232,17 +245,32 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => {
     const cont = containerRef.current;
     if (!cont) return;
-    const bump = (ev: Event) => {
-      manualScrollUntilRef.current = performance.now() + manualPauseMs;
-      pushDebug(`manual ${ev.type}`);
+    const bumpWheel = (ev: WheelEvent) => {
+      const dy = Math.abs(ev.deltaY);
+      const now = performance.now();
+      // Ignore very tiny momentum and throttle debug noise
+      if (dy < 0.5) return;
+      manualScrollUntilRef.current = now + manualPauseMs;
+      if (now - lastManualBumpRef.current > 150) {
+        pushDebug(`manual wheel dy=${ev.deltaY.toFixed(1)}`);
+        lastManualBumpRef.current = now;
+      }
     };
-    cont.addEventListener('wheel', bump as EventListener, { passive: true });
-    cont.addEventListener('touchstart', bump as EventListener, { passive: true });
-    cont.addEventListener('touchmove', bump as EventListener, { passive: true });
+    const bumpTouch = (ev: TouchEvent) => {
+      const now = performance.now();
+      manualScrollUntilRef.current = now + manualPauseMs;
+      if (now - lastManualBumpRef.current > 150) {
+        pushDebug(`manual ${ev.type}`);
+        lastManualBumpRef.current = now;
+      }
+    };
+    cont.addEventListener('wheel', bumpWheel, { passive: true });
+    cont.addEventListener('touchstart', bumpTouch, { passive: true });
+    cont.addEventListener('touchmove', bumpTouch, { passive: true });
     return () => {
-      cont.removeEventListener('wheel', bump as EventListener);
-      cont.removeEventListener('touchstart', bump as EventListener);
-      cont.removeEventListener('touchmove', bump as EventListener);
+      cont.removeEventListener('wheel', bumpWheel);
+      cont.removeEventListener('touchstart', bumpTouch);
+      cont.removeEventListener('touchmove', bumpTouch);
     };
   }, [manualPauseMs]);
 
@@ -613,80 +641,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         </div>
       </div>
 
-      {showMobileSettings && (
-        <div className="sm:hidden mb-3 text-xs flex items-center justify-between gap-2">
-          <label className="inline-flex items-center gap-1">
-            <span>{ui.asrWindowLabel}</span>
-            <select
-              className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
-              value={asrWindowScreens}
-              onChange={(e) => setAsrWindowScreens(Number(e.target.value) as 1 | 2 | 4)}
-            >
-              <option value={1}>{ui.asrWindowViewport}</option>
-              <option value={2}>{ui.asrWindowViewport2x}</option>
-              <option value={4}>{ui.asrWindowWide}</option>
-            </select>
-          </label>
-          <label className="inline-flex items-center gap-1">
-            <span>{ui.asrSnapMode}</span>
-            <select
-              className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
-              value={asrSnapMode}
-              onChange={(e) => setAsrSnapMode((e.target.value as "gentle" | "aggressive"))}
-            >
-              <option value="gentle">{ui.asrSnapGentle}</option>
-              <option value="aggressive">{ui.asrSnapAggressive}</option>
-              <option value="instant">{ui.asrSnapInstant}</option>
-              <option value="sticky">{ui.asrSnapSticky}</option>
-            </select>
-          </label>
-          {asrSnapMode === "sticky" && (
-            <label className="inline-flex items-center gap-1">
-              <span>{ui.asrStickyThreshold}</span>
-              <input
-                type="number"
-                min={4}
-                max={48}
-                step={2}
-                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1 w-16"
-                value={stickyThresholdPx}
-                onChange={(e) => setStickyThresholdPx(Number(e.target.value))}
-              />
-            </label>
-          )}
-          <label className="inline-flex items-center gap-1">
-            <span>{ui.asrLeadLabel}</span>
-            <select
-              className="bg-neutral-100 dark:bg-neutral-800 border rounded px-2 py-1"
-              value={asrLeadWords}
-              onChange={(e) => setAsrLeadWords(Number(e.target.value))}
-            >
-              <option value={0}>0</option>
-              <option value={1}>1</option>
-              <option value={2}>2</option>
-              <option value={3}>3</option>
-              <option value={4}>4</option>
-            </select>
-            </label>
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={lockToHighlight}
-              onChange={(e) => setLockToHighlight(e.target.checked)}
-              disabled={!asrEnabled}
-            />
-            <span>{ui.lockToHighlightLabel}</span>
-          </label>
-          <label className="inline-flex items-center gap-1">
-            <input
-              type="checkbox"
-              checked={showDebug}
-              onChange={(e) => setShowDebug(e.target.checked)}
-            />
-            <span>{ui.debugOverlayLabel}</span>
-          </label>
-        </div>
-      )}
+      {false && showMobileSettings && (<div />)}
 
       {/* Desktop toolbar */}
       <div className="hidden sm:flex flex-wrap items-start justify-between mb-3 gap-2 min-h-[44px]">
@@ -742,85 +697,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
               </span>
             )}
-            {/* ASR window and snap mode controls (desktop) */}
-            <label className="ml-2 inline-flex items-center gap-1">
-              <span>{ui.asrWindowLabel}</span>
-              <select
-                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5"
-                value={asrWindowScreens}
-                onChange={(e) => setAsrWindowScreens(Number(e.target.value) as 1 | 2 | 4)}
-              >
-                <option value={1}>{ui.asrWindowViewport}</option>
-                <option value={2}>{ui.asrWindowViewport2x}</option>
-                <option value={4}>{ui.asrWindowWide}</option>
-              </select>
-            </label>
-            <label className="ml-2 inline-flex items-center gap-1">
-              <span>{ui.asrSnapMode}</span>
-              <select
-                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5"
-                value={asrSnapMode}
-                onChange={(e) => setAsrSnapMode((e.target.value as "gentle" | "aggressive"))}
-              >
-                <option value="gentle">{ui.asrSnapGentle}</option>
-                <option value="aggressive">{ui.asrSnapAggressive}</option>
-                <option value="instant">{ui.asrSnapInstant}</option>
-                <option value="sticky">{ui.asrSnapSticky}</option>
-              </select>
-            </label>
-            {asrSnapMode === "sticky" && (
-              <label className="ml-2 inline-flex items-center gap-1">
-                <span>{ui.asrStickyThreshold}</span>
-                <input
-                  type="number"
-                  min={4}
-                  max={48}
-                  step={2}
-                  className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5 w-16"
-                  value={stickyThresholdPx}
-                  onChange={(e) => setStickyThresholdPx(Number(e.target.value))}
-                />
-              </label>
-            )}
-            <label className="ml-2 inline-flex items-center gap-1">
-              <span>{ui.asrLeadLabel}</span>
-              <select
-                className="bg-neutral-100 dark:bg-neutral-800 border rounded px-1 py-0.5"
-                value={asrLeadWords}
-                onChange={(e) => setAsrLeadWords(Number(e.target.value))}
-              >
-                <option value={0}>0</option>
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-                <option value={4}>4</option>
-              </select>
-            </label>
-            <label className="ml-2 inline-flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={lockToHighlight}
-                onChange={(e) => setLockToHighlight(e.target.checked)}
-                disabled={!asrEnabled}
-              />
-              <span>{ui.lockToHighlightLabel}</span>
-            </label>
-            <label className="ml-2 inline-flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={useMicWhileASR}
-                onChange={(e) => setUseMicWhileASR(e.target.checked)}
-              />
-              <span>Mic drift while ASR</span>
-            </label>
-            <label className="ml-2 inline-flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={showDebug}
-                onChange={(e) => setShowDebug(e.target.checked)}
-              />
-              <span>{ui.debugOverlayLabel}</span>
-            </label>
           </div>
         </div>
       </div>
@@ -904,7 +780,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           <div><b>wordsRead</b>: {Math.round(wordsReadRef.current)}</div>
           <div><b>windowTokens</b>: {dynamicWindowTokens} • <b>viewportWords</b>: {Math.round(viewportWords)}</div>
           <div><b>px/word</b>: {pxPerWord.toFixed(2)} • <b>recentASR</b>: {String(recentAsr)}</div>
-          <div><b>target</b>: {Math.round(lastTargetPxRef.current)} • <b>errorPx</b>: {Math.round(lastErrorPxRef.current)} • <b>mode</b>: {lastTargetModeRef.current}</div>
+          <div>
+            <b>target</b>: {Math.round(lastTargetPxRef.current)} • <b>errorPx</b>: {Math.round(lastErrorPxRef.current)} • <b>mode</b>: {lastTargetModeRef.current}
+          </div>
+          <div>
+            <b>drift</b>: {asrEnabled ? (useAsrDerivedDriftState ? "asr" : (useMicWhileASRState ? "mic" : "none")) : "none"}
+            {asrEnabled && useAsrDerivedDriftState ? <> • <b>asrWps</b>: {asrDriftWpsRef.current.toFixed(2)}</> : null}
+            {!useAsrDerivedDriftState ? <> • <b>WPM</b>: {Math.round(wpm)}</> : null}
+          </div>
           <div><b>manualPause</b>: {Math.max(0, Math.round(manualScrollUntilRef.current - performance.now()))} ms</div>
           <div className="mt-1 border-t border-white/20 pt-1 font-mono leading-snug whitespace-pre-wrap break-words max-h-[30vh] overflow-auto">
             {debugEventsRef.current.slice(-20).map((e, i) => (

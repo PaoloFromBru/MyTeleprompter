@@ -8,6 +8,7 @@ type SampleTexts = { it?: string; en?: string };
 
 export default function Home() {
   const [lang, setLang] = useState<string>("it-IT");
+  const [loaded, setLoaded] = useState(false);
   const [settings, setSettings] = useState({
     fontSizePx: 32,
     mirror: false,
@@ -16,13 +17,21 @@ export default function Home() {
     manualPauseMs: 500,
     useMicWhileASR: true,
     useAsrDerivedDrift: false,
+    asrWindowScreens: 1 as 1|2|4,
+    asrSnapMode: "aggressive" as "gentle"|"aggressive"|"instant"|"sticky",
+    stickyThresholdPx: 16,
+    asrLeadWords: 2,
+    lockToHighlight: false,
+    showDebug: false,
   });
   const [samples, setSamples] = useState<SampleTexts>({});
   const [text, setText] = useState("");
+  const stripBlankLines = (s: string) => s.split(/\r?\n/).filter((ln) => ln.trim() !== "").join("\n");
   const fetchSample = useCallback(async (l: "it" | "en") => {
     try {
       const res = await fetch(`/samples/${l}.txt`);
-      const txt = await res.text();
+      const raw = await res.text();
+      const txt = stripBlankLines(raw);
       setSamples((s) => ({ ...s, [l]: txt }));
       return txt;
     } catch (err) {
@@ -49,6 +58,7 @@ export default function Home() {
       console.error("Failed to load settings", err);
     }
     fetchSample("it").then(setText);
+    setLoaded(true);
   }, [fetchSample]);
   const ui = messages[normalizeUILang(lang)];
   useEffect(() => {
@@ -60,15 +70,17 @@ export default function Home() {
   }, [lang, samples, fetchSample]);
   // Persist settings and language
   useEffect(() => {
+    if (!loaded) return;
     try { localStorage.setItem("tp:lang", lang); } catch (err) {
       console.error("Failed to save language", err);
     }
-  }, [lang]);
+  }, [lang, loaded]);
   useEffect(() => {
+    if (!loaded) return;
     try { localStorage.setItem("tp:settings", JSON.stringify(settings)); } catch (err) {
       console.error("Failed to save settings", err);
     }
-  }, [settings]);
+  }, [settings, loaded]);
 
   // Keyboard shortcuts at page level: m (mirror), +/- (font size)
   useEffect(() => {
@@ -125,6 +137,12 @@ export default function Home() {
         manualPauseMs={settings.manualPauseMs}
         useMicWhileASR={settings.useMicWhileASR}
         useAsrDerivedDrift={settings.useAsrDerivedDrift}
+        asrWindowScreens={settings.asrWindowScreens}
+        asrSnapMode={settings.asrSnapMode}
+        stickyThresholdPx={settings.stickyThresholdPx}
+        asrLeadWords={settings.asrLeadWords}
+        lockToHighlight={settings.lockToHighlight}
+        showDebug={settings.showDebug}
       />
     </main>
   );
