@@ -35,7 +35,13 @@ export default function SettingsPage() {
       setLoaded(true);
     }
   }, []);
-  useEffect(() => { if (!loaded) return; try { localStorage.setItem("tp:lang", lang); } catch {} }, [lang, loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem("tp:lang", lang);
+      window.dispatchEvent(new Event("tp:langchange"));
+    } catch {}
+  }, [lang, loaded]);
   useEffect(() => { if (!loaded) return; try { localStorage.setItem("tp:settings", JSON.stringify(settings)); } catch {} }, [settings, loaded]);
   useEffect(() => {
     const themes = ["theme-light","theme-dark","theme-sepia","theme-contrast"];

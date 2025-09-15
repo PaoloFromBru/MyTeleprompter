@@ -19,7 +19,18 @@ export default function TopNav() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  useEffect(() => { try { const l = localStorage.getItem("tp:lang"); if (l) setLang(l); } catch {} }, []);
+  useEffect(() => {
+    const sync = () => { try { const l = localStorage.getItem("tp:lang"); if (l) setLang(l); } catch {} };
+    sync();
+    const onStorage = (e: StorageEvent) => { if (e.key === "tp:lang") sync(); };
+    const onCustom = () => sync();
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("tp:langchange", onCustom as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("tp:langchange", onCustom as EventListener);
+    };
+  }, []);
   return (
     <header className="sticky top-0 z-40">
       <div className="bg-white/70 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 border-b">

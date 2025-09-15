@@ -94,7 +94,10 @@ export default function Home() {
   // Persist settings and language
   useEffect(() => {
     if (!loaded) return;
-    try { localStorage.setItem("tp:lang", lang); } catch (err) {
+    try {
+      localStorage.setItem("tp:lang", lang);
+      window.dispatchEvent(new Event("tp:langchange"));
+    } catch (err) {
       console.error("Failed to save language", err);
     }
   }, [lang, loaded]);

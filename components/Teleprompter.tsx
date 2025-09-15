@@ -92,12 +92,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const tokenToWordRatio = useMemo(() => totalWords / Math.max(1, tokensLen), [totalWords, tokensLen]);
 
   const [pxPerWord, setPxPerWord] = useState(2);
+  const [bottomPadPx, setBottomPadPx] = useState(0);
   useEffect(() => {
     const calc = () => {
       const cont = containerRef.current, content = contentRef.current;
       if (!cont || !content || totalWords === 0) return;
       const usable = content.scrollHeight - cont.clientHeight;
       setPxPerWord(Math.max(1, usable / Math.max(1, totalWords)));
+      setBottomPadPx(Math.max(0, Math.ceil(cont.clientHeight * (1 - ANCHOR_RATIO))));
     }
     const id = setTimeout(calc, 50);
     // On mobile, orientation changes trigger a resize; listening to resize is enough
@@ -112,6 +114,12 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const viewportWords = useMemo(() => {
     const cont = containerRef.current;
     return cont ? (cont.clientHeight / Math.max(1, pxPerWord)) : 0;
+  }, [pxPerWord]);
+  // Minimum words to keep visible below the anchor (so some white text remains)
+  const trailingBufferWords = useMemo(() => {
+    const cont = containerRef.current;
+    if (!cont) return 0;
+    return Math.max(0, Math.ceil((cont.clientHeight * (1 - ANCHOR_RATIO)) / Math.max(1, pxPerWord)));
   }, [pxPerWord]);
   const dynamicWindowTokens = useMemo(() => {
     if (tokenToWordRatio <= 0) return 400; // fallback
@@ -318,6 +326,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         if (talkingRef.current) next += wordsPerSec * dt;
         else if (!holdOnSilence) next += (0.15 * (baseWpmState / 60)) * dt;
       }
+      // Allow reaching the very end; visual buffer is handled by anchor positioning
       wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
 
       // Accept current ASR match within a generous window around current anchor
@@ -338,6 +347,23 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
       let overrideTarget: number | null = null;
       let anchorWordsForHighlight: number | null = null; // align green highlight to anchor when ASR drives
+      // Helper: map anchor Y to word count using DOM (binary search on word spans)
+      const wordsAtAnchorFromDOM = () => {
+        const cont = containerRef.current;
+        if (!cont || totalWords === 0) return null;
+        const anchorY = cont.scrollTop + cont.clientHeight * ANCHOR_RATIO;
+        let lo = 0, hi = totalWords - 1, ans = -1;
+        const arr = wordElsRef.current;
+        while (lo <= hi) {
+          const mid = (lo + hi) >> 1;
+          const el = arr[mid];
+          if (!el) { ans = -1; break; }
+          const y = el.offsetTop;
+          if (y <= anchorY) { ans = mid; lo = mid + 1; }
+          else { hi = mid - 1; }
+        }
+        return ans >= 0 ? ans + 1 : null; // convert to 1-based word count
+      };
       if (speechIdxRef.current != null) {
         const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
         const asrTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
@@ -433,9 +459,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       }
 
       // Align highlight to the anchor line when ASR is driving the scroll
+      // When ASR is off, derive highlight directly from DOM at the anchor line
       const desiredHighlight = (asrEnabled && anchorWordsForHighlight != null)
         ? anchorWordsForHighlight
-        : Math.round(wordsReadRef.current);
+        : (wordsAtAnchorFromDOM() ?? Math.round(wordsReadRef.current));
       const newHighlight = Math.max(0, Math.min(totalWords, desiredHighlight));
       if (newHighlight !== highlightWordsRef.current) {
         highlightWordsRef.current = newHighlight;
@@ -476,7 +503,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         if (nowMs > manualScrollUntilRef.current) {
           cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
         } else {
-          const targetWords = (cont.scrollTop + cont.clientHeight * ANCHOR_RATIO) / Math.max(1, pxPerWord);
+          // When the user scrolls manually, re-anchor words by DOM at the anchor position
+          const domAnchor = wordsAtAnchorFromDOM();
+          const targetWords = domAnchor ?? ((cont.scrollTop + cont.clientHeight * ANCHOR_RATIO) / Math.max(1, pxPerWord));
           wordsReadRef.current = Math.max(0, Math.min(totalWords, targetWords));
         }
       }
@@ -485,7 +514,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpmState, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords, useAsrDerivedDriftState]);
+  }, [baseWpmState, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords, useAsrDerivedDriftState, trailingBufferWords]);
 
   // Periodically refresh overlay
   const [, setOverlayTick] = useState(0);
@@ -769,7 +798,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div
           ref={contentRef}
           className="text-2xl md:text-3xl whitespace-pre-wrap select-none"
-          style={{ fontSize, transform: mirrorState ? "scaleX(-1)" : undefined }}
+          style={{ fontSize, transform: mirrorState ? "scaleX(-1)" : undefined, paddingBottom: bottomPadPx }}
         >
           {useMemo(() => {
             // Render text preserving whitespace, wrapping word-like chunks for highlighting and anchoring
@@ -836,8 +865,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1 max-w-[46vw]">
           <div><b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
           <div><b>idx</b>: {matchedIndex ?? "-"} • <b>seen</b>: {highlightWords}</div>
-          <div><b>wordsRead</b>: {Math.round(wordsReadRef.current)}</div>
-          <div><b>windowTokens</b>: {dynamicWindowTokens} • <b>viewportWords</b>: {Math.round(viewportWords)}</div>
+          <div><b>wordsRead</b>: {Math.round(wordsReadRef.current)} • <b>highlight</b>: {highlightWords}</div>
+          <div><b>viewportWords</b>: {Math.round(viewportWords)} • <b>tailBuf</b>: {trailingBufferWords}</div>
+          <div><b>windowTokens</b>: {dynamicWindowTokens}</div>
           <div><b>px/word</b>: {pxPerWord.toFixed(2)} • <b>recentASR</b>: {String(recentAsr)}</div>
           <div>
             <b>target</b>: {Math.round(lastTargetPxRef.current)} • <b>errorPx</b>: {Math.round(lastErrorPxRef.current)} • <b>mode</b>: {lastTargetModeRef.current}
