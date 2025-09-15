@@ -66,15 +66,15 @@ export default function HelpPanel({ lang }: { lang?: string }) {
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Space: {ui.start}/{ui.stop}</li>
                   <li>↑/↓: {ui.nudgeBackTitle} / {ui.nudgeForwardTitle}</li>
-                  <li>F: Fullscreen</li>
+                  <li>F: {ui.fullscreenLabel}</li>
                   <li>M: {ui.mirrorModeLabel}</li>
                   <li>+ / -: {ui.fontSizeLabel}</li>
-                  <li>H or ?: Toggle help</li>
+                  <li>H or ?: {ui.helpOpenLabel}</li>
                 </ul>
               </div>
 
               <div>
-                <div className="font-medium mb-1">Environment</div>
+                <div className="font-medium mb-1">{ui.helpEnvironmentTitle}</div>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>
                     {ui.helpSecureContextLabel}: {env.secure == null ? "…" : env.secure ? "✅" : "⚠️"}
@@ -99,7 +99,7 @@ export default function HelpPanel({ lang }: { lang?: string }) {
               </div>
 
               <div>
-                <div className="font-medium mb-1">Privacy</div>
+                <div className="font-medium mb-1">{ui.helpPrivacyTitle}</div>
                 <p>{ui.helpPrivacyNote}</p>
               </div>
             </div>

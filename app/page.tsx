@@ -4,7 +4,7 @@ import Teleprompter from "@/components/Teleprompter";
 import FileTextInput from "@/components/FileTextInput";
 import { messages, normalizeUILang } from "@/lib/i18n";
 
-type SampleTexts = { it?: string; en?: string };
+type SampleTexts = { it?: string; en?: string; fr?: string; nl?: string };
 
 export default function Home() {
   const [lang, setLang] = useState<string>("it-IT");
@@ -36,14 +36,14 @@ export default function Home() {
       const arr = raw ? JSON.parse(raw) : [];
       arr.push({ id: Date.now(), title, text });
       localStorage.setItem("tp:scripts", JSON.stringify(arr));
-      alert("Saved");
+      alert(ui.savedNotice);
     } catch (err) {
       console.error("Failed to save script", err);
     }
   };
   const [showOnboard, setShowOnboard] = useState(false);
   const stripBlankLines = (s: string) => s.split(/\r?\n/).filter((ln) => ln.trim() !== "").join("\n");
-  const fetchSample = useCallback(async (l: "it" | "en") => {
+  const fetchSample = useCallback(async (l: "it" | "en" | "fr" | "nl") => {
     try {
       const res = await fetch(`/samples/${l}.txt`);
       const raw = await res.text();
@@ -85,9 +85,9 @@ export default function Home() {
   }, [fetchSample]);
   const ui = messages[normalizeUILang(lang)];
   useEffect(() => {
-    const norm = normalizeUILang(lang) as "it" | "en";
+    const norm = normalizeUILang(lang) as "it" | "en" | "fr" | "nl";
     const swap = (txt: string) =>
-      setText((prev) => (prev === samples.it || prev === samples.en ? txt : prev));
+      setText((prev) => (prev === samples.it || prev === samples.en || prev === samples.fr || prev === samples.nl ? txt : prev));
     if (samples[norm]) swap(samples[norm]!);
     else fetchSample(norm).then(swap);
   }, [lang, samples, fetchSample]);
@@ -156,7 +156,7 @@ export default function Home() {
         <button
           className="btn btn-primary w-full sm:w-auto"
           onClick={() => {
-            const norm = normalizeUILang(lang) as "it" | "en";
+            const norm = normalizeUILang(lang) as "it" | "en" | "fr" | "nl";
             const existing = samples[norm];
             if (existing) setText(existing);
             else fetchSample(norm).then(setText);
@@ -170,7 +170,7 @@ export default function Home() {
           onClick={saveScript}
           type="button"
         >
-          Save
+          {ui.saveLabel}
         </button>
       </div>
       {/* Minimal header controls moved to Settings page */}
@@ -195,7 +195,7 @@ export default function Home() {
       {showOnboard && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6 text-white text-center">
           <div className="bg-neutral-800 p-6 rounded max-w-md">
-            <p className="mb-4">Allow microphone access and use the controls below to start or stop the teleprompter.</p>
+            <p className="mb-4">{ui.onboardText}</p>
             <button
               className="px-3 py-1 rounded bg-emerald-600"
               onClick={() => {
@@ -203,7 +203,7 @@ export default function Home() {
                 try { localStorage.setItem("tp:onboarded", "1"); } catch {}
               }}
             >
-              Got it
+              {ui.gotItLabel}
             </button>
           </div>
         </div>

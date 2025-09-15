@@ -50,34 +50,36 @@ export default function SettingsPage() {
     <div className="py-6 space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">{ui.settingsTitle}</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">Personalize reading, mic behavior, and ASR follow. Changes save locally.</p>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">{ui.settingsIntro}</p>
       </div>
 
       {/* General */}
       <section className="card p-4 md:p-5 space-y-4">
-        <h2 className="font-medium">General</h2>
+        <h2 className="font-medium">{ui.sectionGeneralTitle}</h2>
         <div className="grid sm:grid-cols-2 gap-4">
           <label className="flex items-center gap-2">
             <span>{ui.langLabel}</span>
             <select className="select" value={lang} onChange={(e) => setLang(e.target.value)}>
               <option value="it-IT">Italiano (it-IT)</option>
               <option value="en-US">English (en-US)</option>
+              <option value="fr-FR">Français (fr-FR)</option>
+              <option value="nl-NL">Nederlands (nl-NL)</option>
             </select>
           </label>
           <label className="flex items-center gap-2">
-            <span>Theme</span>
+            <span>{ui.themeLabel}</span>
             <select className="select" value={settings.theme} onChange={(e) => setSettings((s) => ({ ...s, theme: e.target.value as "light"|"dark"|"sepia"|"contrast" }))}>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="sepia">Sepia</option>
-              <option value="contrast">High Contrast</option>
+              <option value="light">{ui.themeLight}</option>
+              <option value="dark">{ui.themeDark}</option>
+              <option value="sepia">{ui.themeSepia}</option>
+              <option value="contrast">{ui.themeContrast}</option>
             </select>
           </label>
           <label className="flex items-center gap-2">
-            <span>Font</span>
+            <span>{ui.fontLabel}</span>
             <select className="select" value={settings.fontFamily} onChange={(e) => setSettings((s) => ({ ...s, fontFamily: e.target.value as "sans"|"serif" }))}>
-              <option value="sans">Sans</option>
-              <option value="serif">Serif</option>
+              <option value="sans">{ui.fontSans}</option>
+              <option value="serif">{ui.fontSerif}</option>
             </select>
           </label>
         </div>
@@ -85,7 +87,7 @@ export default function SettingsPage() {
 
       {/* Typography & Display */}
       <section className="card p-4 md:p-5 space-y-4">
-        <h2 className="font-medium">Typography & Display</h2>
+        <h2 className="font-medium">{ui.sectionTypographyTitle}</h2>
         <div className="grid sm:grid-cols-2 gap-4 items-center">
           <label className="flex items-center gap-2">
             <span>{ui.fontSizeLabel}</span>
@@ -101,7 +103,7 @@ export default function SettingsPage() {
 
       {/* Mic & Scrolling */}
       <section className="card p-4 md:p-5 space-y-4">
-        <h2 className="font-medium">Mic & Scrolling</h2>
+        <h2 className="font-medium">{ui.sectionMicScrollingTitle}</h2>
         <div className="grid sm:grid-cols-3 gap-4 items-center">
           <label className="flex items-center gap-2">
             <span>{ui.baseWpmLabel}</span>
@@ -112,7 +114,7 @@ export default function SettingsPage() {
             <span>{ui.holdOnSilenceLabel}</span>
           </label>
           <label className="flex items-center gap-2">
-            <span>ASR resume delay (ms)</span>
+            <span>{ui.asrResumeDelayLabel}</span>
             <input type="number" min={0} max={3000} step={50} className="w-24 input" value={settings.manualPauseMs} onChange={(e) => setSettings((s) => ({ ...s, manualPauseMs: Number(e.target.value) }))} />
           </label>
         </div>
@@ -120,23 +122,23 @@ export default function SettingsPage() {
 
       {/* ASR follow & drift */}
       <section className="card p-4 md:p-5 space-y-3">
-        <h2 className="font-medium">ASR Follow & Drift</h2>
+        <h2 className="font-medium">{ui.sectionAsrFollowTitle}</h2>
         <div className="flex flex-col gap-2 text-sm">
           <label className="inline-flex items-center gap-2">
             <input type="checkbox" checked={settings.useMicWhileASR} onChange={(e) => setSettings((s) => ({ ...s, useMicWhileASR: e.target.checked, useAsrDerivedDrift: e.target.checked ? false : s.useAsrDerivedDrift }))} />
-            <span>Mic drift while ASR</span>
+            <span>{ui.micDriftWhileASRLabel}</span>
           </label>
           <label className="inline-flex items-center gap-2">
             <input type="checkbox" checked={settings.useAsrDerivedDrift} onChange={(e) => setSettings((s) => ({ ...s, useAsrDerivedDrift: e.target.checked, useMicWhileASR: e.target.checked ? false : s.useMicWhileASR }))} />
-            <span>ASR-derived drift (between matches)</span>
+            <span>{ui.asrDerivedDriftLabel}</span>
           </label>
-          <p className="text-neutral-600 dark:text-neutral-400">Only one can be active at a time. If both are off, text advances only on ASR matches (or when unlocked, by base WPM during silence).</p>
+          <p className="text-neutral-600 dark:text-neutral-400">{ui.asrDriftMutualExclusionHelp}</p>
         </div>
       </section>
 
       {/* ASR visualization */}
       <section className="card p-4 md:p-5 space-y-4">
-        <h2 className="font-medium">ASR Visualization</h2>
+        <h2 className="font-medium">{ui.sectionAsrVisualizationTitle}</h2>
         <div className="grid sm:grid-cols-2 gap-3 text-sm items-center">
           <label className="inline-flex items-center gap-2">
             <span>{ui.asrWindowLabel}</span>
@@ -151,18 +153,18 @@ export default function SettingsPage() {
             <select className="select" value={settings.asrSnapMode} onChange={(e) => setSettings((s) => ({ ...s, asrSnapMode: (e.target.value as ("gentle"|"aggressive"|"instant"|"sticky")) }))}>
               <option value="gentle">{ui.asrSnapGentle}</option>
               <option value="aggressive">{ui.asrSnapAggressive}</option>
-              <option value="instant">Instant</option>
-              <option value="sticky">Sticky</option>
+              <option value="instant">{ui.asrSnapInstant}</option>
+              <option value="sticky">{ui.asrSnapSticky}</option>
             </select>
           </label>
           {settings.asrSnapMode === "sticky" && (
             <label className="inline-flex items-center gap-2">
-              <span>Threshold (px)</span>
+              <span>{ui.asrStickyThreshold}</span>
               <input type="number" min={4} max={48} step={2} className="w-20 input" value={settings.stickyThresholdPx} onChange={(e) => setSettings((s) => ({ ...s, stickyThresholdPx: Number(e.target.value) }))} />
             </label>
           )}
           <label className="inline-flex items-center gap-2">
-            <span>ASR lead</span>
+            <span>{ui.asrLeadLabel}</span>
             <select className="select" value={settings.asrLeadWords} onChange={(e) => setSettings((s) => ({ ...s, asrLeadWords: Number(e.target.value) }))}>
               {[0,1,2,3,4].map(v => <option key={v} value={v}>{v}</option>)}
             </select>
@@ -178,7 +180,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">These settings are saved locally and used by the teleprompter on the home page.</p>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">{ui.settingsFooterNote}</p>
     </div>
   );
 }

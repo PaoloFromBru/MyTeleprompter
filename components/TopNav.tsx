@@ -3,9 +3,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 import { usePathname } from "next/navigation";
+import { messages, normalizeUILang } from "@/lib/i18n";
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
+  const [lang, setLang] = useState<string>("it-IT");
+  const ui = messages[normalizeUILang(lang)];
   const toggle = () => setOpen((o) => !o);
   const pathname = usePathname();
   const linkClass = (path: string) => `btn btn-nav text-sm ${pathname === path ? "btn-nav-active" : ""}`;
@@ -16,6 +19,7 @@ export default function TopNav() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  useEffect(() => { try { const l = localStorage.getItem("tp:lang"); if (l) setLang(l); } catch {} }, []);
   return (
     <header className="sticky top-0 z-40">
       <div className="bg-white/70 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 border-b">
@@ -31,11 +35,11 @@ export default function TopNav() {
           </Link>
           <div className="flex items-center gap-1 md:gap-2">
             <div className="hidden md:flex items-center gap-1">
-              <Link className={linkClass("/")} href="/">Home</Link>
-              <Link className={linkClass("/settings")} href="/settings">Settings</Link>
-              <Link className={linkClass("/help")} href="/help">Help</Link>
-              <Link className={linkClass("/about")} href="/about">About</Link>
-              <Link className={linkClass("/library")} href="/library">Library</Link>
+              <Link className={linkClass("/")} href="/">{ui.navHome}</Link>
+              <Link className={linkClass("/settings")} href="/settings">{ui.navSettings}</Link>
+              <Link className={linkClass("/help")} href="/help">{ui.navHelp}</Link>
+              <Link className={linkClass("/about")} href="/about">{ui.navAbout}</Link>
+              <Link className={linkClass("/library")} href="/library">{ui.navLibrary}</Link>
             </div>
             <ThemeToggle />
             <button
@@ -66,11 +70,11 @@ export default function TopNav() {
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
-          <Link className={`hover:underline ${pathname === "/" ? "underline font-medium" : ""}`} href="/" onClick={() => setOpen(false)}>Home</Link>
-          <Link className={`hover:underline ${pathname === "/settings" ? "underline font-medium" : ""}`} href="/settings" onClick={() => setOpen(false)}>Settings</Link>
-          <Link className={`hover:underline ${pathname === "/help" ? "underline font-medium" : ""}`} href="/help" onClick={() => setOpen(false)}>Help</Link>
-          <Link className={`hover:underline ${pathname === "/about" ? "underline font-medium" : ""}`} href="/about" onClick={() => setOpen(false)}>About</Link>
-          <Link className={`hover:underline ${pathname === "/library" ? "underline font-medium" : ""}`} href="/library" onClick={() => setOpen(false)}>Library</Link>
+          <Link className={`hover:underline ${pathname === "/" ? "underline font-medium" : ""}`} href="/" onClick={() => setOpen(false)}>{ui.navHome}</Link>
+          <Link className={`hover:underline ${pathname === "/settings" ? "underline font-medium" : ""}`} href="/settings" onClick={() => setOpen(false)}>{ui.navSettings}</Link>
+          <Link className={`hover:underline ${pathname === "/help" ? "underline font-medium" : ""}`} href="/help" onClick={() => setOpen(false)}>{ui.navHelp}</Link>
+          <Link className={`hover:underline ${pathname === "/about" ? "underline font-medium" : ""}`} href="/about" onClick={() => setOpen(false)}>{ui.navAbout}</Link>
+          <Link className={`hover:underline ${pathname === "/library" ? "underline font-medium" : ""}`} href="/library" onClick={() => setOpen(false)}>{ui.navLibrary}</Link>
         </div>
       )}
     </header>

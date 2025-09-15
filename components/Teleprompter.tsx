@@ -579,8 +579,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
               }
             }}
             className="btn btn-secondary"
-            aria-label="Fullscreen"
-            title="Fullscreen"
+            aria-label={ui.fullscreenLabel}
+            title={ui.fullscreenLabel}
             type="button"
           >
             {/* fullscreen icon */}
@@ -657,7 +657,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center">
         <div className="card text-white p-4 w-11/12 max-w-sm space-y-3 bg-neutral-900/80">
             <label className="flex items-center gap-2">
-              <span className="whitespace-nowrap">Font size</span>
+              <span className="whitespace-nowrap">{ui.fontSizeLabel}</span>
               <input
                 type="range"
                 min={20}
@@ -669,10 +669,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={mirrorState} onChange={(e) => setMirrorState(e.target.checked)} />
-              <span>Mirror</span>
+              <span>{ui.mirrorModeLabel}</span>
             </label>
             <label className="flex items-center justify-between">
-              <span>Base WPM</span>
+              <span>{ui.baseWpmLabel}</span>
               <input
                 type="number"
                 className="w-20 input"
@@ -682,14 +682,14 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={asrEnabled} onChange={(e) => setAsrEnabled(e.target.checked)} />
-              <span>ASR follow</span>
+              <span>{ui.asrFollowTitle}</span>
             </label>
             <div className="text-right pt-2">
               <button
                 className="btn btn-primary"
                 onClick={() => setShowMobileSettings(false)}
               >
-                Close
+                {ui.helpCloseLabel}
               </button>
             </div>
           </div>
