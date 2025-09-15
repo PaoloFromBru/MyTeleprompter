@@ -462,7 +462,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       // When ASR is off, derive highlight directly from DOM at the anchor line
       const desiredHighlight = (asrEnabled && anchorWordsForHighlight != null)
         ? anchorWordsForHighlight
-        : (wordsAtAnchorFromDOM() ?? Math.round(wordsReadRef.current));
+        : Math.round(wordsReadRef.current);
       const newHighlight = Math.max(0, Math.min(totalWords, desiredHighlight));
       if (newHighlight !== highlightWordsRef.current) {
         highlightWordsRef.current = newHighlight;
@@ -503,10 +503,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         if (nowMs > manualScrollUntilRef.current) {
           cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
         } else {
-          // When the user scrolls manually, re-anchor words by DOM at the anchor position
-          const domAnchor = wordsAtAnchorFromDOM();
-          const targetWords = domAnchor ?? ((cont.scrollTop + cont.clientHeight * ANCHOR_RATIO) / Math.max(1, pxPerWord));
-          wordsReadRef.current = Math.max(0, Math.min(totalWords, targetWords));
+          // User is manually scrolling; do not change reading progress/highlight here.
         }
       }
       raf = requestAnimationFrame(tick);
