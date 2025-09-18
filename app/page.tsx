@@ -130,6 +130,23 @@ export default function Home() {
     }
     setLoaded(true);
   }, [fetchSample]);
+  // Keep language in sync with Settings changes (including on mobile)
+  useEffect(() => {
+    const sync = () => {
+      try {
+        const l = localStorage.getItem("tp:lang");
+        if (l) setLang(l);
+      } catch {}
+    };
+    const onStorage = (e: StorageEvent) => { if (e.key === "tp:lang") sync(); };
+    const onCustom = () => sync();
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("tp:langchange", onCustom as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("tp:langchange", onCustom as EventListener);
+    };
+  }, []);
   const ui = messages[normalizeUILang(lang)];
   useEffect(() => {
     const norm = normalizeUILang(lang) as "it" | "en" | "fr" | "nl";

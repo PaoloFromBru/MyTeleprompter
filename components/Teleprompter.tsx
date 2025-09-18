@@ -162,6 +162,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   // Avoid hydration mismatch: detect client and feature support after mount
   const [isClient, setIsClient] = useState(false);
   const [micSupported, setMicSupported] = useState<boolean | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   useEffect(() => {
     setIsClient(true);
     try {
@@ -183,10 +184,21 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     if (document.fullscreenElement) {
       document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
     } else {
-      try { cont.requestFullscreen(); } catch (err) {
+      try {
+        // Prefer hiding browser UI when supported
+        // @ts-ignore - navigationUI is not in older TS DOM libs
+        cont.requestFullscreen({ navigationUI: "hide" });
+      } catch (err) {
         console.error("Failed to request fullscreen", err);
       }
     }
+  }, []);
+
+  // Track fullscreen state to adapt UI on mobile
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
   // Quick settings dialog focus trap handled inside the dialog component
@@ -488,6 +500,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   return (
     <div className="w-full mx-auto max-w-3xl pb-16">
       {/* Mobile compact toolbar */}
+      {!isFullscreen && (
       <ToolbarMobile
         ui={ui}
         permission={permission}
@@ -508,7 +521,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         onOpenSettings={() => setShowMobileSettings(true)}
         manualMode={manualMode}
         setManualMode={setManualMode}
-      />
+      />)}
 
       <QuickSettingsDialog
         ui={ui}
@@ -549,7 +562,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         <div
           ref={containerRef}
           className="h-[68vh] sm:h-[78vh] border rounded-lg overflow-y-auto touch-pan-y overscroll-contain bg-black text-white px-6 sm:px-10 py-10 sm:py-16 leading-relaxed tracking-wide"
-          style={{ scrollBehavior: "auto" }}
+          style={{ scrollBehavior: "auto", height: isFullscreen ? "100vh" : undefined }}
         >
         <div
           ref={contentRef}
