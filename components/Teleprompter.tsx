@@ -214,8 +214,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   useEffect(() => {
     try {
       const el = document.documentElement as unknown as { requestFullscreen?: unknown };
-      const supported = !!(document && (document as any).fullscreenEnabled) || typeof (el.requestFullscreen) === 'function';
-      setSupportsFullscreen(!!supported);
+      const docWithFlag = document as Document & { fullscreenEnabled?: boolean };
+      const supported = Boolean(docWithFlag.fullscreenEnabled) || typeof el.requestFullscreen === 'function';
+      setSupportsFullscreen(supported);
     } catch {
       setSupportsFullscreen(false);
     }
