@@ -68,8 +68,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const wordElsRef = useRef<Array<HTMLSpanElement | null>>([]);
   const caretRef = useRef<HTMLDivElement | null>(null);
   const boundaryCaretRef = useRef<HTMLDivElement | null>(null);
-  const lastCaretWordIdxRef = useRef<number | null>(null);
-  const lastBoundaryCaretIdxRef = useRef<number | null>(null);
   const manualScrollUntilRef = useRef<number>(0);
   const lastManualBumpRef = useRef<number>(0);
   // Debug: last target info and recent events
@@ -90,7 +88,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const { pxPerWord, bottomPadPx, viewportWords, trailingBufferWords } = useTeleprompterMetrics(
     containerRef, contentRef, totalWords, fontSize, ANCHOR_RATIO
   );
-  const { tokensLen, tokenToWordRatio } = useAsrMapping(text, null, totalWords);
+  const { tokenToWordRatio } = useAsrMapping(text, null, totalWords);
   const dynamicWindowTokens = useMemo(() => {
     if (tokenToWordRatio <= 0) return 400; // fallback
     const tokens = Math.round((viewportWords * asrWindowScreens) / tokenToWordRatio);
@@ -105,7 +103,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     windowRadius: dynamicWindowTokens,
   });
 
-  const { recognizedWords } = useAsrMapping(text, matchedIndex, totalWords);
+  // Mapping with matchedIndex handled in engine; no recognizedWords needed here
 
   const [recentAsr, setRecentAsr] = useState(false);
   const engine = useTeleprompterLoop({

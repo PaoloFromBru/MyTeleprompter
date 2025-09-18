@@ -1,8 +1,17 @@
 "use client";
 import React, { useEffect, useRef } from "react";
 
+type UIStrings = {
+  settingsTitle: string;
+  fontSizeLabel: string;
+  mirrorModeLabel: string;
+  baseWpmLabel: string;
+  asrFollowTitle: string;
+  helpCloseLabel: string;
+};
+
 type Props = {
-  ui: any;
+  ui: UIStrings;
   open: boolean;
   onClose: () => void;
   fontSize: number;
@@ -66,4 +75,3 @@ export default function QuickSettingsDialog({ ui, open, onClose, fontSize, setFo
     </div>
   );
 }
-

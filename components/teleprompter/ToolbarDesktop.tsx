@@ -1,8 +1,24 @@
 "use client";
 import React from "react";
 
+type UIStrings = {
+  micEnable: string;
+  start: string;
+  stop: string;
+  reset: string;
+  statusSpeaking: string;
+  statusPaused: string;
+  pxWord: string;
+  nudgeBackTitle: string;
+  nudgeForwardTitle: string;
+  asrFollowTitle: string;
+  asrUnsupportedTitle: string;
+  asrOnLabel: string;
+  asrOffLabel: string;
+};
+
 type Props = {
-  ui: any;
+  ui: UIStrings;
   permission?: string;
   start: () => void;
   stop: () => void;
