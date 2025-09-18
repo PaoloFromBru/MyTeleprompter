@@ -562,7 +562,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             let wordIdx = 0;
             // Reset word element refs array size on render
             wordElsRef.current = new Array(totalWords).fill(null);
-            const windowSpan = Math.max(40, Math.round((viewportWords || 0) * 1));
+            const aheadWords = Math.max(0, totalWords - highlightWords);
+            const baseWindow = Math.max(20, Math.round((viewportWords || 0) * 0.5));
+            const shrinkNearEnd = Math.max(0, Math.round(aheadWords * 0.5));
+            const windowSpan = Math.max(10, Math.min(baseWindow, shrinkNearEnd));
             const startIdx = Math.max(0, highlightWords - windowSpan);
             return parts.map((part, i) => {
               const isWs = /^\s+$/.test(part);

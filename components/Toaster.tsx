@@ -8,8 +8,9 @@ export default function Toaster() {
 
   useEffect(() => {
     const onToast = (e: Event) => {
-      const ce = e as CustomEvent<ToastItem>;
-      const item: ToastItem = { id: Date.now() + Math.random(), ...ce.detail };
+      const ce = e as CustomEvent<Omit<ToastItem, 'id'>>;
+      const detail = ce.detail || { msg: "", variant: "info" };
+      const item: ToastItem = { id: Date.now() + Math.random(), ...detail };
       setItems((arr) => [...arr, item]);
       const ttl = setTimeout(() => {
         setItems((arr) => arr.filter((t) => t.id !== item.id));
@@ -44,4 +45,3 @@ export default function Toaster() {
     </div>
   );
 }
-

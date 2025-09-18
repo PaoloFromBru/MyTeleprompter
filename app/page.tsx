@@ -114,8 +114,8 @@ export default function Home() {
                 setTextMode(mode);
               }
             };
-            if (samples[smLang]) applyComparison(samples[smLang]!);
-            else fetchSample(smLang).then(applyComparison);
+            // Fetch sample to compare; avoid depending on 'samples' in this mount effect
+            fetchSample(smLang).then(applyComparison);
           } else {
             setTextMode(mode);
           }
