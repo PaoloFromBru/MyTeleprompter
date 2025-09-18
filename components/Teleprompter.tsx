@@ -186,8 +186,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     } else {
       try {
         // Prefer hiding browser UI when supported
-        // @ts-expect-error navigationUI may not exist on older DOM libs
-        cont.requestFullscreen({ navigationUI: "hide" });
+        cont.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
       } catch (err) {
         console.error("Failed to request fullscreen", err);
       }
