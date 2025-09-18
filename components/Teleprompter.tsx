@@ -2,6 +2,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMicSpeechRate } from "@/hooks/useMicSpeechRate";
 import { useSpeechSync } from "@/hooks/useSpeechSync";
+// tokenization handled via hooks
+import { useTeleprompterMetrics } from "@/hooks/useTeleprompterMetrics";
+import { useAsrMapping } from "@/hooks/useAsrMapping";
 
 type Props = {
   text: string;
@@ -22,6 +25,10 @@ type Props = {
 };
 
 import { messages, normalizeUILang } from "@/lib/i18n";
+import ToolbarMobile from "./teleprompter/ToolbarMobile";
+import ToolbarDesktop from "./teleprompter/ToolbarDesktop";
+import QuickSettingsDialog from "./teleprompter/QuickSettingsDialog";
+import { useTeleprompterLoop } from "@/hooks/useTeleprompterLoop";
 
 export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang, fontSizePx, mirror = false, manualPauseMs = 500, useMicWhileASR = true, useAsrDerivedDrift = false, asrWindowScreens: pAsrWindowScreens, asrSnapMode: pAsrSnapMode, stickyThresholdPx: pStickyThresholdPx, asrLeadWords: pAsrLeadWords, lockToHighlight: pLockToHighlight, showDebug: pShowDebug }: Props) {
   const { start, stop, listening, permission, wpm, talking } = useMicSpeechRate({
@@ -34,6 +41,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [asrSnapMode, setAsrSnapMode] = useState<"gentle" | "aggressive" | "instant" | "sticky">(pAsrSnapMode ?? "aggressive");
   const [stickyThresholdPx, setStickyThresholdPx] = useState<number>(pStickyThresholdPx ?? 16);
   const [asrLeadWords, setAsrLeadWords] = useState<number>(pAsrLeadWords ?? 2);
+  const [manualMode, setManualMode] = useState(false);
+  // If Manual mode is enabled, ensure ASR is off to avoid confusion
+  useEffect(() => { if (manualMode && asrEnabled) setAsrEnabled(false); }, [manualMode, asrEnabled]);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
   const [lockToHighlight, setLockToHighlight] = useState<boolean>(pLockToHighlight ?? false);
   const [showDebug, setShowDebug] = useState<boolean>(pShowDebug ?? false);
@@ -58,12 +68,15 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const wordElsRef = useRef<Array<HTMLSpanElement | null>>([]);
   const caretRef = useRef<HTMLDivElement | null>(null);
   const boundaryCaretRef = useRef<HTMLDivElement | null>(null);
+  const lastCaretWordIdxRef = useRef<number | null>(null);
+  const lastBoundaryCaretIdxRef = useRef<number | null>(null);
   const manualScrollUntilRef = useRef<number>(0);
   const lastManualBumpRef = useRef<number>(0);
   // Debug: last target info and recent events
-  const lastTargetPxRef = useRef(0);
-  const lastErrorPxRef = useRef(0);
-  const lastTargetModeRef = useRef<"fallback"|"anchor"|"sticky"|"instant">("fallback");
+  // Debug values returned from the engine hook
+  let lastTargetPxRef = useRef(0);
+  let lastErrorPxRef = useRef(0);
+  let lastTargetModeRef = useRef<"fallback"|"anchor"|"sticky"|"instant">("fallback");
   const debugEventsRef = useRef<string[]>([]);
   const pushDebug = (msg: string) => {
     const arr = debugEventsRef.current;
@@ -72,55 +85,12 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     if (arr.length > 30) arr.splice(0, arr.length - 30);
   };
 
-  const words = useMemo(() =>
-    text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean), [text]
-  );
-  // Tokenization similar to ASR side for mapping ASR index -> word index
-  function normalizeTokenLocal(s: string) {
-    return s
-      .toLowerCase()
-      // Remove diacritics
-      .normalize("NFD").replace(/\p{Diacritic}+/gu, "")
-      // Keep only letters/numbers
-      .replace(/[^\p{L}\p{N}]+/gu, "")
-      .trim();
-  }
-  const tokensLen = useMemo(() =>
-    text.split(/\s+/).map(normalizeTokenLocal).filter(Boolean).length
-  , [text]);
+  const words = useMemo(() => text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean), [text]);
   const totalWords = words.length;
-  const tokenToWordRatio = useMemo(() => totalWords / Math.max(1, tokensLen), [totalWords, tokensLen]);
-
-  const [pxPerWord, setPxPerWord] = useState(2);
-  const [bottomPadPx, setBottomPadPx] = useState(0);
-  useEffect(() => {
-    const calc = () => {
-      const cont = containerRef.current, content = contentRef.current;
-      if (!cont || !content || totalWords === 0) return;
-      const usable = content.scrollHeight - cont.clientHeight;
-      setPxPerWord(Math.max(1, usable / Math.max(1, totalWords)));
-      setBottomPadPx(Math.max(0, Math.ceil(cont.clientHeight * (1 - ANCHOR_RATIO))));
-    }
-    const id = setTimeout(calc, 50);
-    // On mobile, orientation changes trigger a resize; listening to resize is enough
-    window.addEventListener("resize", calc);
-    return () => {
-      clearTimeout(id);
-      window.removeEventListener("resize", calc);
-    };
-  }, [text, totalWords, fontSize]);
-
-  // Compute ASR search window based on viewport size and setting (in tokens)
-  const viewportWords = useMemo(() => {
-    const cont = containerRef.current;
-    return cont ? (cont.clientHeight / Math.max(1, pxPerWord)) : 0;
-  }, [pxPerWord]);
-  // Minimum words to keep visible below the anchor (so some white text remains)
-  const trailingBufferWords = useMemo(() => {
-    const cont = containerRef.current;
-    if (!cont) return 0;
-    return Math.max(0, Math.ceil((cont.clientHeight * (1 - ANCHOR_RATIO)) / Math.max(1, pxPerWord)));
-  }, [pxPerWord]);
+  const { pxPerWord, bottomPadPx, viewportWords, trailingBufferWords } = useTeleprompterMetrics(
+    containerRef, contentRef, totalWords, fontSize, ANCHOR_RATIO
+  );
+  const { tokensLen, tokenToWordRatio } = useAsrMapping(text, null, totalWords);
   const dynamicWindowTokens = useMemo(() => {
     if (tokenToWordRatio <= 0) return 400; // fallback
     const tokens = Math.round((viewportWords * asrWindowScreens) / tokenToWordRatio);
@@ -135,68 +105,46 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     windowRadius: dynamicWindowTokens,
   });
 
-  // Map ASR token index -> word index using the same whitespace split used for rendering.
-  const tokenCumulativePerWord = useMemo(() => {
-    const parts = text.split(/(\s+)/);
-    const cum: number[] = [];
-    let acc = 0;
-    for (const part of parts) {
-      const isWs = /^\s+$/.test(part);
-      if (isWs) continue;
-      const tok = normalizeTokenLocal(part);
-      const inc = tok ? 1 : 0;
-      acc += inc;
-      cum.push(acc);
-    }
-    return cum;
-  }, [text]);
+  const { recognizedWords } = useAsrMapping(text, matchedIndex, totalWords);
 
-  const recognizedWords = useMemo(() => {
-    if (matchedIndex == null) return 0;
-    const t = matchedIndex + 1; // last token in the match, 1-based count
-    // first word whose cumulative token count >= t
-    const idx = tokenCumulativePerWord.findIndex((c) => c >= t);
-    if (idx < 0) return tokenCumulativePerWord.length;
-    return idx + 1; // convert to 1-based word count
-  }, [matchedIndex, tokenCumulativePerWord]);
-
-  const [highlightWords, setHighlightWords] = useState(0);
-  const highlightWordsRef = useRef(0);
+  const [recentAsr, setRecentAsr] = useState(false);
+  const engine = useTeleprompterLoop({
+    containerRef,
+    contentRef,
+    wordElsRef,
+    caretRef,
+    boundaryCaretRef,
+    totalWords,
+    pxPerWord,
+    baseWpm: baseWpmState,
+    holdOnSilence,
+    talking,
+    wpm,
+    asrEnabled,
+    lockToHighlight,
+    matchedIndex,
+    lastMatchAt,
+    tokenToWordRatio,
+    asrWindowScreens,
+    asrSnapMode,
+    stickyThresholdPx,
+    asrLeadWords,
+    manualPauseMs,
+    manualScrollUntilRef,
+    anchorRatio: ANCHOR_RATIO,
+    useAsrDerivedDrift: useAsrDerivedDriftState,
+    manualMode,
+  });
+  const highlightWords = engine.highlightWords;
+  lastTargetPxRef = engine.debug.lastTargetPxRef;
+  lastErrorPxRef = engine.debug.lastErrorPxRef;
+  lastTargetModeRef = engine.debug.lastTargetModeRef;
 
   // Debug overlay renders live values; no extra state needed.
-
-  const wordsReadRef = useRef(0);
-  const lastTsRef = useRef<number | null>(null);
-  const integratorRef = useRef(0);
-
-  // Mirror hook values into refs for the rAF loop (avoid effect deps churn)
-  const wpmRef = useRef(wpm);
-  const talkingRef = useRef(talking);
-  useEffect(() => { wpmRef.current = wpm; }, [wpm]);
-  useEffect(() => { talkingRef.current = talking; }, [talking]);
-  const speechIdxRef = useRef<number | null>(null);
-  // Accept ASR matches generously behind, but limit far-ahead jumps
-  useEffect(() => {
-    if (matchedIndex == null) return;
-    const cont = containerRef.current;
-    if (!cont) { speechIdxRef.current = matchedIndex; return; }
-    const visibleWords = cont.clientHeight / Math.max(1, pxPerWord);
-    const currentWords = wordsReadRef.current;
-    const currentTok = Math.round(currentWords / Math.max(1e-6, tokenToWordRatio));
-    const viewportTokens = visibleWords / Math.max(1e-6, tokenToWordRatio);
-    const aheadTok = Math.ceil(viewportTokens * asrWindowScreens);
-    const behindTok = Math.ceil(viewportTokens * 3); // allow far behind so ASR can catch up
-    const minTok = Math.max(0, currentTok - behindTok);
-    const maxTok = currentTok + aheadTok;
-    if (matchedIndex >= minTok && matchedIndex <= maxTok) {
-      speechIdxRef.current = matchedIndex;
-    }
-  }, [matchedIndex, pxPerWord, asrWindowScreens, tokenToWordRatio, totalWords]);
   // Optionally stop mic when ASR is on (if the user disables concurrent mic)
   useEffect(() => {
     if (asrEnabled && listening && !useMicWhileASRState) stop();
   }, [asrEnabled, listening, stop, useMicWhileASRState]);
-  const [recentAsr, setRecentAsr] = useState(false);
   useEffect(() => {
     const id = setInterval(() => {
       setRecentAsr(!!lastMatchAt && Date.now() - lastMatchAt < 2000);
@@ -204,34 +152,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     return () => clearInterval(id);
   }, [lastMatchAt]);
 
-  // ASR-derived drift (words/sec estimated from recent ASR matches)
-  const asrDriftWpsRef = useRef(0);
-  const lastAsrIdxRef = useRef<number | null>(null);
-  const lastAsrTsRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (matchedIndex == null || !lastMatchAt) return;
-    const now = lastMatchAt;
-    const lastIdx = lastAsrIdxRef.current;
-    const lastTs = lastAsrTsRef.current;
-    if (lastIdx != null && lastTs != null && now > lastTs && matchedIndex >= lastIdx) {
-      const dt = (now - lastTs) / 1000;
-      const dTokens = matchedIndex - lastIdx;
-      const dWords = dTokens * tokenToWordRatio;
-      const inst = Math.max(0, Math.min(6, dWords / Math.max(1e-3, dt)));
-      asrDriftWpsRef.current = 0.6 * inst + 0.4 * asrDriftWpsRef.current;
-    }
-    lastAsrIdxRef.current = matchedIndex;
-    lastAsrTsRef.current = now;
-  }, [matchedIndex, lastMatchAt, tokenToWordRatio, useAsrDerivedDriftState]);
-
-  // no-op effect for debug now
+  // Engine handles ASR mapping and drift
 
   const reset = () => {
-    wordsReadRef.current = 0;
-    integratorRef.current = 0;
-    if (containerRef.current) containerRef.current.scrollTop = 0;
-    highlightWordsRef.current = 0;
-    setHighlightWords(0);
+    engine.resetEngine();
     try { resetASR(); } catch (err) {
       console.error("Failed to reset ASR", err);
     }
@@ -254,6 +178,20 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       setMicSupported(false);
     }
   }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const cont = containerRef.current;
+    if (!cont) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
+    } else {
+      try { cont.requestFullscreen(); } catch (err) {
+        console.error("Failed to request fullscreen", err);
+      }
+    }
+  }, []);
+
+  // Quick settings dialog focus trap handled inside the dialog component
 
   // Detect manual user scrolling (wheel/touch) and pause auto-follow briefly
   useEffect(() => {
@@ -289,30 +227,16 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   }, [manualPauseMs]);
 
   const nudgeByViewport = useCallback((sign: 1 | -1) => {
-    const cont = containerRef.current;
-    const deltaWords = cont ? (cont.clientHeight / Math.max(1, pxPerWord)) * 0.15 : 10;
-    wordsReadRef.current = Math.max(0, Math.min(totalWords, wordsReadRef.current + sign * deltaWords));
-    integratorRef.current = 0;
-    manualScrollUntilRef.current = performance.now() + manualPauseMs;
+    engine.nudgeByViewport(sign);
     pushDebug(`manual nudge ${sign}`);
-  }, [pxPerWord, totalWords, manualPauseMs]);
+  }, [engine]);
   // Keep lockToHighlight consistent with ASR state
   useEffect(() => {
     if (!asrEnabled && lockToHighlight) setLockToHighlight(false);
   }, [asrEnabled, lockToHighlight]);
 
-  // Re-anchor when geometry changes: keep current scroll aligned to anchor
-  useEffect(() => {
-    const cont = containerRef.current, content = contentRef.current;
-    if (!cont || !content) return;
-    const targetWords = (cont.scrollTop + cont.clientHeight * ANCHOR_RATIO) / Math.max(1, pxPerWord);
-    wordsReadRef.current = Math.max(0, Math.min(totalWords, targetWords));
-    integratorRef.current = 0; // avoid windup after jumps
-  }, [pxPerWord, totalWords]);
-
-  useEffect(() => {
-    let raf = 0;
-
+  /* Engine loop handled by hook */
+  /*
     const tick = () => {
       const now = performance.now();
       if (lastTsRef.current == null) lastTsRef.current = now;
@@ -347,23 +271,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
       let overrideTarget: number | null = null;
       let anchorWordsForHighlight: number | null = null; // align green highlight to anchor when ASR drives
-      // Helper: map anchor Y to word count using DOM (binary search on word spans)
-      const wordsAtAnchorFromDOM = () => {
-        const cont = containerRef.current;
-        if (!cont || totalWords === 0) return null;
-        const anchorY = cont.scrollTop + cont.clientHeight * ANCHOR_RATIO;
-        let lo = 0, hi = totalWords - 1, ans = -1;
-        const arr = wordElsRef.current;
-        while (lo <= hi) {
-          const mid = (lo + hi) >> 1;
-          const el = arr[mid];
-          if (!el) { ans = -1; break; }
-          const y = el.offsetTop;
-          if (y <= anchorY) { ans = mid; lo = mid + 1; }
-          else { hi = mid - 1; }
-        }
-        return ans >= 0 ? ans + 1 : null; // convert to 1-based word count
-      };
+      let pendingCaretLeft: number | null = null;
+      let pendingBoundaryLeft: number | null = null;
+      // (reserved) helper to map anchor Y to word index (not used currently)
       if (speechIdxRef.current != null) {
         const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
         const asrTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
@@ -401,7 +311,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                     el.offsetTop - cont2.clientHeight * ANCHOR_RATIO
                   )
                 );
-                cont2.scrollTop = target;
                 overrideTarget = target;
               }
             }
@@ -433,21 +342,27 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         const boundaryCaret = boundaryCaretRef.current;
         const idxForPx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
         const elForPx = wordElsRef.current[idxForPx];
-        if (cont3 && elForPx) {
+        if (cont3 && elForPx && caret && lastCaretWordIdxRef.current !== idxForPx) {
           const contRect = cont3.getBoundingClientRect();
           const elRect = elForPx.getBoundingClientRect();
           const left = (elRect.left - contRect.left) + elRect.width / 2;
-          if (caret) caret.style.left = `${Math.round(left)}px`;
-          // Boundary caret at end of green text (last highlighted word)
-          if (boundaryCaret && highlightWordsRef.current > 0) {
-            const bIdx = Math.min(totalWords - 1, Math.max(0, highlightWordsRef.current - 1));
+          pendingCaretLeft = Math.round(left);
+        }
+        // Boundary caret at end of green text (last highlighted word)
+        if (cont3 && boundaryCaret && highlightWordsRef.current > 0) {
+          const bIdx = Math.min(totalWords - 1, Math.max(0, highlightWordsRef.current - 1));
+          if (lastBoundaryCaretIdxRef.current !== bIdx) {
             const bel = wordElsRef.current[bIdx];
             if (bel) {
+              const contRect = cont3.getBoundingClientRect();
               const bRect = bel.getBoundingClientRect();
               const bLeft = (bRect.left - contRect.left) + bRect.width / 2;
-              boundaryCaret.style.left = `${Math.round(bLeft)}px`;
+              pendingBoundaryLeft = Math.round(bLeft);
             }
           }
+        }
+        // Compute pixel anchor for the ASR target word (used when not snapping instantly)
+        if (cont3 && elForPx) {
           const pixelAnchor = Math.max(0,
             Math.min(
               cont3.scrollHeight - cont3.clientHeight,
@@ -479,10 +394,10 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         );
         const target = overrideTarget ?? fallbackTarget;
         // Update debug metrics and decide mode label
-        const modeLabel: "anchor" | "fallback" = overrideTarget != null ? "anchor" : "fallback";
+        const modeLabel = overrideTarget != null ? "anchor" : "fallback";
         lastTargetPxRef.current = target;
         lastErrorPxRef.current = target - cont.scrollTop;
-        let modeFinal: "fallback"|"anchor"|"sticky"|"instant" = modeLabel;
+        let modeFinal = modeLabel;
         if (asrSnapMode === "sticky") modeFinal = "sticky";
         else if (asrSnapMode === "instant") modeFinal = "instant";
         lastTargetModeRef.current = modeFinal;
@@ -495,15 +410,27 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             const alphaS = Math.min(1, dt * 10);
             cont.scrollTop = cont.scrollTop + err * alphaS;
           }
-          raf = requestAnimationFrame(tick);
-          return;
+          // fall through to caret/style writes
         }
-        const alpha = Math.min(1, dt * 10);
-        const nowMs = performance.now();
-        if (nowMs > manualScrollUntilRef.current) {
-          cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
-        } else {
-          // User is manually scrolling; do not change reading progress/highlight here.
+        else {
+          const alpha = Math.min(1, dt * 10);
+          const nowMs = performance.now();
+          if (nowMs > manualScrollUntilRef.current) {
+            cont.scrollTop = cont.scrollTop + (target - cont.scrollTop) * alpha;
+          } else {
+            // User is manually scrolling; do not change reading progress/highlight here.
+          }
+        }
+
+        // Apply pending caret/boundary writes after scroll
+        if (pendingCaretLeft != null && caretRef.current) {
+          caretRef.current.style.left = `${pendingCaretLeft}px`;
+          const idx = Math.max(0, Math.min(totalWords - 1, Math.round(wordsReadRef.current) - 1));
+          lastCaretWordIdxRef.current = idx;
+        }
+        if (pendingBoundaryLeft != null && boundaryCaretRef.current) {
+          boundaryCaretRef.current.style.left = `${pendingBoundaryLeft}px`;
+          lastBoundaryCaretIdxRef.current = Math.min(totalWords - 1, Math.max(0, highlightWordsRef.current - 1));
         }
       }
       raf = requestAnimationFrame(tick);
@@ -511,7 +438,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [baseWpmState, pxPerWord, holdOnSilence, totalWords, tokenToWordRatio, asrSnapMode, asrLeadWords, asrEnabled, lockToHighlight, asrWindowScreens, matchedIndex, stickyThresholdPx, recognizedWords, useAsrDerivedDriftState, trailingBufferWords]);
+  */
 
   // Periodically refresh overlay
   const [, setOverlayTick] = useState(0);
@@ -563,228 +490,62 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   return (
     <div className="w-full mx-auto max-w-3xl pb-16">
       {/* Mobile compact toolbar */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-900/90 backdrop-blur border-t border-white/10 text-white flex items-center justify-between gap-2 p-2">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={permission !== "granted" ? start : (listening ? stop : start)}
-            className={`btn ${listening ? "btn-primary" : "btn-primary"}`}
-            aria-label={permission !== "granted" ? ui.micEnable : (listening ? ui.stop : ui.start)}
-            title={permission !== "granted" ? ui.micEnable : (listening ? ui.stop : ui.start)}
-            disabled={isClient ? micSupported === false : undefined}
-          >
-            {/* mic icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-              <path d="M19 10a7 7 0 0 1-14 0"/>
-              <path d="M12 17v5"/>
-            </svg>
-          </button>
-          <button
-            onClick={reset}
-            className="btn btn-secondary"
-            aria-label={ui.reset}
-            title={ui.reset}
-            type="button"
-          >
-            {/* reset icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="1 4 1 10 7 10"/>
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-            </svg>
-          </button>
-          <button
-            onClick={() => {
-              const cont = containerRef.current;
-              if (!cont) return;
-              if (document.fullscreenElement) {
-                document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
-              } else {
-                try { cont.requestFullscreen(); } catch (err) {
-                  console.error("Failed to request fullscreen", err);
-                }
-              }
-            }}
-            className="btn btn-secondary"
-            aria-label={ui.fullscreenLabel}
-            title={ui.fullscreenLabel}
-            type="button"
-          >
-            {/* fullscreen icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="16 4 20 4 20 8"/>
-              <polyline points="8 20 4 20 4 16"/>
-              <polyline points="20 16 20 20 16 20"/>
-              <polyline points="4 8 4 4 8 4"/>
-            </svg>
-          </button>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => nudgeByViewport(-1)}
-            className="btn btn-secondary"
-            aria-label={ui.nudgeBackTitle}
-            title={ui.nudgeBackTitle}
-            type="button"
-          >
-            {/* up icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="18 15 12 9 6 15"/>
-            </svg>
-          </button>
-          <button
-            onClick={() => nudgeByViewport(1)}
-            className="btn btn-secondary"
-            aria-label={ui.nudgeForwardTitle}
-            title={ui.nudgeForwardTitle}
-            type="button"
-          >
-            {/* down icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setAsrEnabled((v) => !v)}
-            className={`btn ${asrEnabled ? "btn-primary" : "btn-secondary"}`}
-            aria-label={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
-            title={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
-            type="button"
-            disabled={!asrSupported}
-          >
-            {/* waveform icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12h2M7 12h2M11 12h2M15 12h2M19 12h2"/>
-              <path d="M7 8v8M11 6v12M15 8v8"/>
-            </svg>
-          </button>
-          <span className="text-xs tabular-nums px-1">{Math.round(wpm)} WPM</span>
-          {asrEnabled && (
-            <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
-          )}
-          <button
-            onClick={() => setShowMobileSettings((v) => !v)}
-            className="btn btn-secondary"
-            aria-label={ui.settingsTitle}
-            title={ui.settingsTitle}
-            type="button"
-          >
-            {/* gear icon */}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.6 15a1.65 1.65 0 0 0-1.51-1H2a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 3.6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8 3.6a1.65 1.65 0 0 0 1-1.51V2a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 16 3.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.4 8c.36.31.59.76.59 1.25S20.76 10.69 20.4 11a1.65 1.65 0 0 0-.33 1.82z"/>
-            </svg>
-          </button>
-        </div>
-      </div>
+      <ToolbarMobile
+        ui={ui}
+        permission={permission}
+        start={start}
+        stop={stop}
+        listening={listening}
+        isClient={isClient}
+        micSupported={micSupported}
+        reset={reset}
+        toggleFullscreen={toggleFullscreen}
+        nudgeBack={() => nudgeByViewport(-1)}
+        nudgeForward={() => nudgeByViewport(1)}
+        asrSupported={asrSupported}
+        asrEnabled={asrEnabled}
+        setAsrEnabled={setAsrEnabled}
+        recentAsr={recentAsr}
+        wpm={wpm}
+        onOpenSettings={() => setShowMobileSettings(true)}
+        manualMode={manualMode}
+        setManualMode={setManualMode}
+      />
 
-      {showMobileSettings && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center">
-        <div className="card text-white p-4 w-11/12 max-w-sm space-y-3 bg-neutral-900/80">
-            <label className="flex items-center gap-2">
-              <span className="whitespace-nowrap">{ui.fontSizeLabel}</span>
-              <input
-                type="range"
-                min={20}
-                max={72}
-                value={fontSize}
-                onChange={(e) => setFontSize(Number(e.target.value))}
-              />
-              <span className="w-10 text-right tabular-nums">{fontSize}px</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={mirrorState} onChange={(e) => setMirrorState(e.target.checked)} />
-              <span>{ui.mirrorModeLabel}</span>
-            </label>
-            <label className="flex items-center justify-between">
-              <span>{ui.baseWpmLabel}</span>
-              <input
-                type="number"
-                className="w-20 input"
-                value={baseWpmState}
-                onChange={(e) => setBaseWpmState(Number(e.target.value))}
-              />
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={asrEnabled} onChange={(e) => setAsrEnabled(e.target.checked)} />
-              <span>{ui.asrFollowTitle}</span>
-            </label>
-            <div className="text-right pt-2">
-              <button
-                className="btn btn-primary"
-                onClick={() => setShowMobileSettings(false)}
-              >
-                {ui.helpCloseLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <QuickSettingsDialog
+        ui={ui}
+        open={showMobileSettings}
+        onClose={() => setShowMobileSettings(false)}
+        fontSize={fontSize}
+        setFontSize={setFontSize}
+        mirrorState={mirrorState}
+        setMirrorState={setMirrorState}
+        baseWpmState={baseWpmState}
+        setBaseWpmState={setBaseWpmState}
+        asrEnabled={asrEnabled}
+        setAsrEnabled={setAsrEnabled}
+      />
 
       {/* Desktop toolbar */}
-      <div className="hidden sm:flex flex-wrap items-start justify-between mb-3 gap-2 min-h-[44px]">
-        <div className="flex items-center gap-2 whitespace-nowrap">
-          {permission !== "granted" ? (
-            <button
-              onClick={start}
-              className="btn btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isClient ? micSupported === false : undefined}
-              title={isClient && micSupported === false ? "Microphone API not supported" : undefined}
-            >
-              🎤 {ui.micEnable}
-            </button>
-          ) : (
-            <button onClick={listening ? stop : start} className="btn btn-primary text-sm">
-              {listening ? `⏹ ${ui.stop}` : `▶️ ${ui.start}`}
-            </button>
-          )}
-          <button onClick={reset} className="btn btn-secondary text-sm">⟲ {ui.reset}</button>
-        </div>
-        <div className="flex items-center gap-2 text-xs tabular-nums flex-wrap">
-          <span className="inline-block max-w-[60vw] truncate">WPM: <b>{Math.round(wpm)}</b> • {talking ? ui.statusSpeaking : ui.statusPaused} • {ui.pxWord}: {pxPerWord.toFixed(1)}</span>
-          <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
-          <div className="flex items-center gap-1 whitespace-nowrap">
-            <button
-              onClick={() => nudgeByViewport(-1)}
-              className="btn btn-secondary"
-              title={ui.nudgeBackTitle}
-              type="button"
-              aria-label={ui.nudgeBackTitle}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="18 15 12 9 6 15"/>
-              </svg>
-            </button>
-            <button
-              onClick={() => nudgeByViewport(1)}
-              className="btn btn-secondary"
-              title={ui.nudgeForwardTitle}
-              type="button"
-              aria-label={ui.nudgeForwardTitle}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-            <div className="hidden sm:block h-3 w-px bg-white/20 mx-1" />
-            <button
-              onClick={() => setAsrEnabled((v) => !v)}
-              className={`btn text-xs ${asrEnabled ? "btn-primary" : "btn-secondary"}`}
-              title={asrSupported ? ui.asrFollowTitle : ui.asrUnsupportedTitle}
-              type="button"
-              disabled={!asrSupported}
-            >
-              {asrEnabled ? ui.asrOnLabel : ui.asrOffLabel}
-            </button>
-            {asrEnabled && (
-              <span className="inline-flex items-center gap-1 ml-1">
-                <span className={`inline-block w-2 h-2 rounded-full ${recentAsr ? "bg-emerald-400" : "bg-neutral-400"}`} title="Recent ASR match" />
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+      <ToolbarDesktop
+        ui={ui}
+        permission={permission}
+        start={start}
+        stop={stop}
+        listening={listening}
+        reset={reset}
+        wpm={wpm}
+        talking={talking}
+        pxPerWord={pxPerWord}
+        nudgeBack={() => nudgeByViewport(-1)}
+        nudgeForward={() => nudgeByViewport(1)}
+        asrSupported={asrSupported}
+        asrEnabled={asrEnabled}
+        setAsrEnabled={setAsrEnabled}
+        recentAsr={recentAsr}
+        manualMode={manualMode}
+        setManualMode={setManualMode}
+      />
 
       <div className="relative">
         <div
@@ -803,11 +564,13 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
             let wordIdx = 0;
             // Reset word element refs array size on render
             wordElsRef.current = new Array(totalWords).fill(null);
+            const windowSpan = Math.max(40, Math.round((viewportWords || 0) * 1));
+            const startIdx = Math.max(0, highlightWords - windowSpan);
             return parts.map((part, i) => {
               const isWs = /^\s+$/.test(part);
               if (isWs) return <span key={i}>{part}</span>;
               wordIdx += 1;
-              const seen = wordIdx <= highlightWords;
+              const seen = wordIdx > startIdx && wordIdx <= highlightWords;
               return (
                 <span
                   key={i}
@@ -818,7 +581,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
                 </span>
               );
             });
-          }, [text, highlightWords, totalWords])}
+          }, [text, highlightWords, totalWords, viewportWords])}
         </div>
         </div>
         {/* Reading anchor guide (fixed over scroller) */}
@@ -860,9 +623,9 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       )}
       {showDebug && (
         <div className="fixed right-4 bottom-4 z-50 text-xs bg-black/60 text-white border border-white/20 rounded p-3 space-y-1 max-w-[46vw]">
-          <div><b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
+          <div><b>manual</b>: {String(manualMode)} • <b>lock</b>: {String(lockToHighlight)} • <b>ASR</b>: {String(asrEnabled)}</div>
           <div><b>idx</b>: {matchedIndex ?? "-"} • <b>seen</b>: {highlightWords}</div>
-          <div><b>wordsRead</b>: {Math.round(wordsReadRef.current)} • <b>highlight</b>: {highlightWords}</div>
+          <div><b>reading</b>: {highlightWords} • <b>highlight</b>: {highlightWords}</div>
           <div><b>viewportWords</b>: {Math.round(viewportWords)} • <b>tailBuf</b>: {trailingBufferWords}</div>
           <div><b>windowTokens</b>: {dynamicWindowTokens}</div>
           <div><b>px/word</b>: {pxPerWord.toFixed(2)} • <b>recentASR</b>: {String(recentAsr)}</div>
@@ -871,7 +634,6 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           </div>
           <div>
             <b>drift</b>: {asrEnabled ? (useAsrDerivedDriftState ? "asr" : (useMicWhileASRState ? "mic" : "none")) : "none"}
-            {asrEnabled && useAsrDerivedDriftState ? <> • <b>asrWps</b>: {asrDriftWpsRef.current.toFixed(2)}</> : null}
             {!useAsrDerivedDriftState ? <> • <b>WPM</b>: {Math.round(wpm)}</> : null}
           </div>
           <div><b>manualPause</b>: {Math.max(0, Math.round(manualScrollUntilRef.current - performance.now()))} ms</div>

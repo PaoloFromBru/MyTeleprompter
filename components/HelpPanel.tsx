@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { messages, normalizeUILang } from "@/lib/i18n";
 
 export default function HelpPanel({ lang }: { lang?: string }) {
   const ui = messages[normalizeUILang(lang)];
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const [env, setEnv] = useState<{ secure: boolean | null; mic: boolean | null; asr: boolean | null }>({ secure: null, mic: null, asr: null });
   useEffect(() => {
@@ -35,6 +36,25 @@ export default function HelpPanel({ lang }: { lang?: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Focus trap and initial focus when open
+  useEffect(() => {
+    if (!open) return;
+    const root = panelRef.current;
+    if (!root) return;
+    const focusables = root.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]');
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    first?.focus();
+    const trap = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setOpen(false); return; }
+      if (e.key !== 'Tab' || focusables.length === 0) return;
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    };
+    root.addEventListener('keydown', trap as unknown as EventListener);
+    return () => root.removeEventListener('keydown', trap as unknown as EventListener);
+  }, [open]);
+
   return (
     <>
       <button
@@ -47,11 +67,11 @@ export default function HelpPanel({ lang }: { lang?: string }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <div className="absolute inset-x-4 top-10 md:inset-x-auto md:right-10 md:w-[560px] bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 rounded-lg shadow-xl border max-h-[80vh] overflow-auto">
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby="help-panel-title">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
+          <div ref={panelRef} className="absolute inset-x-4 top-10 md:inset-x-auto md:right-10 md:w-[560px] bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 rounded-lg shadow-xl border max-h-[80vh] overflow-auto">
             <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h2 className="text-base font-semibold">{ui.helpTitle}</h2>
+              <h2 id="help-panel-title" className="text-base font-semibold">{ui.helpTitle}</h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}

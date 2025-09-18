@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 import { usePathname } from "next/navigation";
@@ -12,6 +12,7 @@ export default function TopNav() {
   const toggle = () => setOpen((o) => !o);
   const pathname = usePathname();
   const linkClass = (path: string) => `btn btn-nav text-sm ${pathname === path ? "btn-nav-active" : ""}`;
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -31,6 +32,22 @@ export default function TopNav() {
       window.removeEventListener("tp:langchange", onCustom as EventListener);
     };
   }, []);
+  useEffect(() => {
+    if (!open) return;
+    const root = overlayRef.current;
+    if (!root) return;
+    const focusables = root.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    first?.focus();
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || focusables.length === 0) return;
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    };
+    root.addEventListener('keydown', trap as unknown as EventListener);
+    return () => root.removeEventListener('keydown', trap as unknown as EventListener);
+  }, [open]);
   return (
     <header className="sticky top-0 z-40">
       <div className="bg-white/70 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 border-b">
@@ -69,7 +86,14 @@ export default function TopNav() {
         </nav>
       </div>
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center text-xl text-white space-y-6">
+        <div
+          ref={overlayRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-menu-title"
+          className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center text-xl text-white space-y-6"
+        >
+          <h2 id="mobile-menu-title" className="sr-only">Menu</h2>
           <button
             onClick={toggle}
             aria-label="Close menu"

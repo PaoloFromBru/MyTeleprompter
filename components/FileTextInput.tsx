@@ -2,11 +2,20 @@
 import { useRef } from "react";
 import { messages, normalizeUILang } from "@/lib/i18n";
 import { extractTextFromFile } from "@/lib/textConverters";
+import { toast } from "@/lib/toast";
 
 export default function FileTextInput({ onLoadText, lang }: { onLoadText: (text: string) => void; lang?: string; }) {
   const ui = messages[normalizeUILang(lang)];
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const handleFile = async (file: File) => onLoadText(await extractTextFromFile(file));
+  const handleFile = async (file: File) => {
+    try {
+      onLoadText(await extractTextFromFile(file));
+      toast("File loaded", "success");
+    } catch (err) {
+      console.error("Failed to extract text", err);
+      toast("Failed to load file", "error");
+    }
+  };
   return (
     <div className="flex flex-wrap items-center gap-2 w-full">
       <input

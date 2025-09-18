@@ -14,7 +14,10 @@ export default function LibraryPage() {
     } catch {}
   }, []);
   const load = (s: Script) => {
-    try { localStorage.setItem("tp:currentScript", s.text); } catch {}
+    try {
+      localStorage.setItem("tp:currentScript", s.text);
+      localStorage.setItem("tp:textMode", "custom");
+    } catch {}
     router.push("/");
   };
   const remove = (id: number) => {

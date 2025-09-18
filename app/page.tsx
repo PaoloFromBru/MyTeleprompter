@@ -3,12 +3,14 @@ import { useCallback, useEffect, useState } from "react";
 import Teleprompter from "@/components/Teleprompter";
 import FileTextInput from "@/components/FileTextInput";
 import { messages, normalizeUILang } from "@/lib/i18n";
+import { toast } from "@/lib/toast";
 
 type SampleTexts = { it?: string; en?: string; fr?: string; nl?: string };
 
 export default function Home() {
   const [lang, setLang] = useState<string>("it-IT");
   const [loaded, setLoaded] = useState(false);
+  const [textMode, setTextMode] = useState<string>("");
   const [settings, setSettings] = useState({
     fontSizePx: 32,
     mirror: false,
@@ -28,6 +30,22 @@ export default function Home() {
   });
   const [samples, setSamples] = useState<SampleTexts>({});
   const [text, setText] = useState("");
+  const setCustomText = (t: string) => {
+    setText(t);
+    try {
+      localStorage.setItem("tp:currentScript", t);
+      localStorage.setItem("tp:textMode", "custom");
+    } catch {}
+    setTextMode("custom");
+  };
+  const setSampleText = (l: "it"|"en"|"fr"|"nl", t: string) => {
+    setText(t);
+    try {
+      localStorage.setItem("tp:currentScript", t);
+      localStorage.setItem("tp:textMode", `sample:${l}`);
+    } catch {}
+    setTextMode(`sample:${l}`);
+  };
   const saveScript = () => {
     const title = prompt("Title for this script?");
     if (!title) return;
@@ -36,9 +54,10 @@ export default function Home() {
       const arr = raw ? JSON.parse(raw) : [];
       arr.push({ id: Date.now(), title, text });
       localStorage.setItem("tp:scripts", JSON.stringify(arr));
-      alert(ui.savedNotice);
+      toast(ui.savedNotice, "success");
     } catch (err) {
       console.error("Failed to save script", err);
+      toast("Failed to save script", "error");
     }
   };
   const [showOnboard, setShowOnboard] = useState(false);
@@ -52,6 +71,7 @@ export default function Home() {
       return txt;
     } catch (err) {
       console.error("Failed to load sample", err);
+      toast("Failed to load demo text", "error");
       return "";
     }
   }, []);
@@ -75,22 +95,49 @@ export default function Home() {
     }
     try {
       const cur = localStorage.getItem("tp:currentScript");
-      if (cur) setText(cur);
-      else fetchSample("it").then(setText);
+      const mode = localStorage.getItem("tp:textMode");
+      if (cur) {
+        setText(cur);
+        if (!mode) {
+          try { localStorage.setItem("tp:textMode", "custom"); } catch {}
+          setTextMode("custom");
+        } else {
+          // If mode says sample:X but current text differs from that sample, correct to custom
+          const m = /^sample:(it|en|fr|nl)$/.exec(mode || "");
+          if (m) {
+            const smLang = m[1] as "it"|"en"|"fr"|"nl";
+            const applyComparison = (sampleTxt: string) => {
+              if (sampleTxt && sampleTxt !== cur) {
+                try { localStorage.setItem("tp:textMode", "custom"); } catch {}
+                setTextMode("custom");
+              } else {
+                setTextMode(mode);
+              }
+            };
+            if (samples[smLang]) applyComparison(samples[smLang]!);
+            else fetchSample(smLang).then(applyComparison);
+          } else {
+            setTextMode(mode);
+          }
+        }
+      } else {
+        // No current script persisted; fallback to Italian sample
+        fetchSample("it").then((txt) => setSampleText("it", txt));
+      }
       if (!localStorage.getItem("tp:onboarded")) setShowOnboard(true);
     } catch {
-      fetchSample("it").then(setText);
+      fetchSample("it").then((txt) => setSampleText("it", txt));
     }
     setLoaded(true);
   }, [fetchSample]);
   const ui = messages[normalizeUILang(lang)];
   useEffect(() => {
     const norm = normalizeUILang(lang) as "it" | "en" | "fr" | "nl";
-    const swap = (txt: string) =>
-      setText((prev) => (prev === samples.it || prev === samples.en || prev === samples.fr || prev === samples.nl ? txt : prev));
-    if (samples[norm]) swap(samples[norm]!);
-    else fetchSample(norm).then(swap);
-  }, [lang, samples, fetchSample]);
+    if (!textMode.startsWith("sample")) return;
+    const apply = (txt: string) => setSampleText(norm, txt);
+    if (samples[norm]) apply(samples[norm]!);
+    else fetchSample(norm).then(apply);
+  }, [lang, textMode, samples, fetchSample]);
   // Persist settings and language
   useEffect(() => {
     if (!loaded) return;
@@ -108,8 +155,9 @@ export default function Home() {
     }
   }, [settings, loaded]);
   useEffect(() => {
+    if (!loaded) return;
     try { localStorage.setItem("tp:currentScript", text); } catch {}
-  }, [text]);
+  }, [text, loaded]);
 
   useEffect(() => {
     const themes = ["theme-light","theme-dark","theme-sepia","theme-contrast"];
@@ -154,15 +202,15 @@ export default function Home() {
       </h1>
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-full sm:w-auto">
-          <FileTextInput onLoadText={setText} lang={lang} />
+          <FileTextInput onLoadText={setCustomText} lang={lang} />
         </div>
         <button
           className="btn btn-primary w-full sm:w-auto"
           onClick={() => {
             const norm = normalizeUILang(lang) as "it" | "en" | "fr" | "nl";
             const existing = samples[norm];
-            if (existing) setText(existing);
-            else fetchSample(norm).then(setText);
+            if (existing) setSampleText(norm, existing);
+            else fetchSample(norm).then((txt) => setSampleText(norm, txt));
           }}
           type="button"
         >
