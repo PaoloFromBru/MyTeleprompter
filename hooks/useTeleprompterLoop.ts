@@ -300,7 +300,7 @@ export function useTeleprompterLoop(opts: {
         const modeLabel = overrideTarget != null ? "anchor" : "fallback";
         lastTargetPxRef.current = target;
         lastErrorPxRef.current = target - cont.scrollTop;
-        let modeFinal = modeLabel;
+        let modeFinal: "fallback" | "anchor" | "sticky" | "instant" = modeLabel;
         if (asrSnapMode === "sticky") modeFinal = "sticky";
         else if (asrSnapMode === "instant") modeFinal = "instant";
         lastTargetModeRef.current = modeFinal;
