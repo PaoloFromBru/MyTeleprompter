@@ -6,11 +6,12 @@ import { messages, normalizeUILang } from "@/lib/i18n";
 import { toast } from "@/lib/toast";
 
 type SampleTexts = { it?: string; en?: string; fr?: string; nl?: string };
+type ScriptState = { mode: "custom" } | { mode: "sample"; sampleLang: "it"|"en"|"fr"|"nl" };
 
 export default function Home() {
   const [lang, setLang] = useState<string>("it-IT");
   const [loaded, setLoaded] = useState(false);
-  const [textMode, setTextMode] = useState<string>("");
+  const [scriptState, setScriptState] = useState<ScriptState>({ mode: "custom" });
   const [settings, setSettings] = useState({
     fontSizePx: 32,
     mirror: false,
@@ -34,17 +35,27 @@ export default function Home() {
     setText(t);
     try {
       localStorage.setItem("tp:currentScript", t);
-      localStorage.setItem("tp:textMode", "custom");
+      localStorage.setItem("tp:scriptState", JSON.stringify({ mode: "custom" } satisfies ScriptState));
+      localStorage.removeItem("tp:textMode");
     } catch {}
-    setTextMode("custom");
+    setScriptState({ mode: "custom" });
   };
   const setSampleText = (l: "it"|"en"|"fr"|"nl", t: string) => {
     setText(t);
     try {
       localStorage.setItem("tp:currentScript", t);
-      localStorage.setItem("tp:textMode", `sample:${l}`);
+      localStorage.setItem("tp:scriptState", JSON.stringify({ mode: "sample", sampleLang: l } satisfies ScriptState));
+      localStorage.removeItem("tp:textMode");
     } catch {}
-    setTextMode(`sample:${l}`);
+    setScriptState({ mode: "sample", sampleLang: l });
+  };
+  const detachSample = () => {
+    // Keep current text, just stop following language
+    try {
+      localStorage.setItem("tp:scriptState", JSON.stringify({ mode: "custom" } satisfies ScriptState));
+      localStorage.removeItem("tp:textMode");
+    } catch {}
+    setScriptState({ mode: "custom" });
   };
   const saveScript = () => {
     const title = prompt("Title for this script?");
@@ -95,32 +106,18 @@ export default function Home() {
     }
     try {
       const cur = localStorage.getItem("tp:currentScript");
-      const mode = localStorage.getItem("tp:textMode");
-      if (cur) {
-        setText(cur);
-        if (!mode) {
-          try { localStorage.setItem("tp:textMode", "custom"); } catch {}
-          setTextMode("custom");
-        } else {
-          // If mode says sample:X but current text differs from that sample, correct to custom
-          const m = /^sample:(it|en|fr|nl)$/.exec(mode || "");
-          if (m) {
-            const smLang = m[1] as "it"|"en"|"fr"|"nl";
-            const applyComparison = (sampleTxt: string) => {
-              if (sampleTxt && sampleTxt !== cur) {
-                try { localStorage.setItem("tp:textMode", "custom"); } catch {}
-                setTextMode("custom");
-              } else {
-                setTextMode(mode);
-              }
-            };
-            // Fetch sample to compare; avoid depending on 'samples' in this mount effect
-            fetchSample(smLang).then(applyComparison);
-          } else {
-            setTextMode(mode);
-          }
-        }
-      } else {
+      const legacyMode = localStorage.getItem("tp:textMode");
+      const stateRaw = localStorage.getItem("tp:scriptState");
+      let state: ScriptState | null = null;
+      if (stateRaw) {
+        try { state = JSON.parse(stateRaw) as ScriptState; } catch {}
+      } else if (legacyMode) {
+        const m = /^sample:(it|en|fr|nl)$/.exec(legacyMode || "");
+        state = m ? { mode: "sample", sampleLang: m[1] as "it"|"en"|"fr"|"nl" } : { mode: "custom" };
+      }
+      if (cur) setText(cur);
+      if (state) setScriptState(state);
+      if (!cur) {
         // No current script persisted; fallback to Italian sample
         fetchSample("it").then((txt) => setSampleText("it", txt));
       }
@@ -149,12 +146,20 @@ export default function Home() {
   }, []);
   const ui = messages[normalizeUILang(lang)];
   useEffect(() => {
+    // If in sample mode, keep sample coupled to the UI language
     const norm = normalizeUILang(lang) as "it" | "en" | "fr" | "nl";
-    if (!textMode.startsWith("sample")) return;
-    const apply = (txt: string) => setSampleText(norm, txt);
-    if (samples[norm]) apply(samples[norm]!);
-    else fetchSample(norm).then(apply);
-  }, [lang, textMode, samples, fetchSample]);
+    if (scriptState.mode !== "sample") return;
+    if (scriptState.sampleLang !== norm) {
+      // Update state and load the new sample text
+      const apply = (txt: string) => setSampleText(norm, txt);
+      if (samples[norm]) apply(samples[norm]!);
+      else fetchSample(norm).then(apply);
+    } else {
+      // Ensure text present for current sampleLang
+      const apply = (txt: string) => setSampleText(norm, txt);
+      if (!text && samples[norm]) apply(samples[norm]!);
+    }
+  }, [lang, scriptState, samples, fetchSample, text]);
   // Persist settings and language
   useEffect(() => {
     if (!loaded) return;
@@ -233,6 +238,15 @@ export default function Home() {
         >
           {ui.loadDemo}
         </button>
+        {scriptState.mode === "sample" && (
+          <button
+            className="btn btn-secondary w-full sm:w-auto"
+            onClick={detachSample}
+            type="button"
+          >
+            {ui.detachSampleLabel}
+          </button>
+        )}
         <button
           className="btn btn-secondary w-full sm:w-auto"
           onClick={saveScript}

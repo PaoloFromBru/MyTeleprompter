@@ -163,6 +163,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const [isClient, setIsClient] = useState(false);
   const [micSupported, setMicSupported] = useState<boolean | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [supportsFullscreen, setSupportsFullscreen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   useEffect(() => {
     setIsClient(true);
     try {
@@ -181,17 +183,25 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const toggleFullscreen = useCallback(() => {
     const cont = containerRef.current;
     if (!cont) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
-    } else {
-      try {
-        // Prefer hiding browser UI when supported
-        cont.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
-      } catch (err) {
-        console.error("Failed to request fullscreen", err);
+    // If already in any full view, exit
+    if (document.fullscreenElement || focusMode) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
       }
+      setFocusMode(false);
+      return;
     }
-  }, []);
+    // Enter full view: prefer native fullscreen when supported
+    if (supportsFullscreen) {
+      try {
+        cont.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions).catch(() => setFocusMode(true));
+      } catch {
+        setFocusMode(true);
+      }
+    } else {
+      setFocusMode(true);
+    }
+  }, [focusMode, supportsFullscreen]);
 
   // Track fullscreen state to adapt UI on mobile
   useEffect(() => {
@@ -199,6 +209,30 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+
+  // Detect fullscreen support (iOS Safari lacks it)
+  useEffect(() => {
+    try {
+      const el = document.documentElement as unknown as { requestFullscreen?: unknown };
+      const supported = !!(document && (document as any).fullscreenEnabled) || typeof (el.requestFullscreen) === 'function';
+      setSupportsFullscreen(!!supported);
+    } catch {
+      setSupportsFullscreen(false);
+    }
+  }, []);
+
+  // Lock scroll when in focus mode (CSS fallback for iOS)
+  useEffect(() => {
+    if (!focusMode) return;
+    const prevHtml = document.documentElement.style.overflow;
+    const prevBody = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, [focusMode]);
 
   // Quick settings dialog focus trap handled inside the dialog component
 
@@ -499,7 +533,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   return (
     <div className="w-full mx-auto max-w-3xl pb-16">
       {/* Mobile compact toolbar */}
-      {!isFullscreen && (
+      {!isFullscreen && !focusMode && (
       <ToolbarMobile
         ui={ui}
         permission={permission}
@@ -557,11 +591,13 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         setManualMode={setManualMode}
       />
 
-      <div className="relative">
+      <div className={`relative ${focusMode || isFullscreen ? 'fixed inset-0 z-50 bg-black' : ''}`}
+           style={focusMode || isFullscreen ? { paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}
+      >
         <div
           ref={containerRef}
           className="h-[68vh] sm:h-[78vh] border rounded-lg overflow-y-auto touch-pan-y overscroll-contain bg-black text-white px-6 sm:px-10 py-10 sm:py-16 leading-relaxed tracking-wide"
-          style={{ scrollBehavior: "auto", height: isFullscreen ? "100vh" : undefined }}
+          style={{ scrollBehavior: "auto", height: (isFullscreen || focusMode) ? "100vh" : undefined }}
         >
         <div
           ref={contentRef}
@@ -627,6 +663,19 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
         >
           <div className="w-0 h-0 border-l-4 border-r-4 border-t-8 border-l-transparent border-r-transparent border-t-orange-400 drop-shadow-[0_0_6px_rgba(251,146,60,0.7)]" />
         </div>
+        {/* Exit affordance in full view */}
+        {(isFullscreen || focusMode) && (
+          <button
+            onClick={toggleFullscreen}
+            type="button"
+            className="absolute top-2 right-2 px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white border border-white/20 z-50"
+            title={ui.fullscreenLabel}
+            aria-label={ui.fullscreenLabel}
+            style={{ WebkitTapHighlightColor: "transparent" }}
+          >
+            ✕
+          </button>
+        )}
       </div>
       {asrEnabled && (
         <div className="mt-2 text-xs opacity-80">

@@ -34,6 +34,7 @@ export const messages: Record<UILang, {
   asrOffLabel: string;
   fileLoadLabel: string;
   saveLabel: string;
+  detachSampleLabel: string;
   savedNotice: string;
   settingsTitle: string;
   settingsIntro: string;
@@ -117,6 +118,7 @@ export const messages: Record<UILang, {
     asrOffLabel: "ASR: OFF",
     fileLoadLabel: "Load text…",
     saveLabel: "Save",
+    detachSampleLabel: "Detach sample",
     savedNotice: "Saved",
     settingsTitle: "Settings",
     settingsIntro: "Personalize reading, mic behavior, and ASR follow. Changes save locally.",
@@ -200,6 +202,7 @@ export const messages: Record<UILang, {
     asrOffLabel: "ASR: OFF",
     fileLoadLabel: "Charger du texte…",
     saveLabel: "Enregistrer",
+    detachSampleLabel: "Détacher l’exemple",
     savedNotice: "Enregistré",
     settingsTitle: "Paramètres",
     settingsIntro: "Personnalisez la lecture, le micro et le suivi ASR. Les changements sont enregistrés localement.",
@@ -283,6 +286,7 @@ export const messages: Record<UILang, {
     asrOffLabel: "ASR: OFF",
     fileLoadLabel: "Tekst laden…",
     saveLabel: "Opslaan",
+    detachSampleLabel: "Loskoppelen voorbeeld",
     savedNotice: "Opgeslagen",
     settingsTitle: "Instellingen",
     settingsIntro: "Personaliseer lezen, microfoongedrag en ASR-volgen. Wijzigingen worden lokaal opgeslagen.",
@@ -366,6 +370,7 @@ export const messages: Record<UILang, {
     asrOffLabel: "ASR: OFF",
     fileLoadLabel: "Carica testo…",
     saveLabel: "Salva",
+    detachSampleLabel: "Scollega demo",
     savedNotice: "Salvato",
     settingsTitle: "Impostazioni",
     settingsIntro: "Personalizza lettura, comportamento del microfono e follow ASR. Le modifiche vengono salvate localmente.",
