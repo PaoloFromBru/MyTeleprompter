@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import TopNav from "@/components/TopNav";
 import Footer from "@/components/Footer";
 import Toaster from "@/components/Toaster";
+import SWRegister from "@/components/SWRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,6 +30,13 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,6 +49,7 @@ export default function RootLayout({
         <main className="mx-auto max-w-5xl px-4 py-4 pb-16">{children}</main>
         <Footer />
         <Toaster />
+        <SWRegister />
       </body>
     </html>
   );
