@@ -270,6 +270,29 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     };
   }, [manualPauseMs]);
 
+  // Keyboard shortcuts: Space (start/stop), F (fullscreen)
+  useEffect(() => {
+    const isTypingTarget = (el: Element | null) => {
+      if (!el) return false;
+      const he = el as HTMLElement;
+      return he.isContentEditable || ["INPUT","TEXTAREA","SELECT"].includes(he.tagName);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(document.activeElement)) return;
+      const k = e.key;
+      if (k === ' ' || k === 'Spacebar') {
+        e.preventDefault();
+        if (permission !== 'granted') start();
+        else if (listening) stop(); else start();
+      } else if (k.toLowerCase() === 'f') {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [permission, listening, start, stop, toggleFullscreen]);
+
   const nudgeByViewport = useCallback((sign: 1 | -1) => {
     engine.nudgeByViewport(sign);
     pushDebug(`manual nudge ${sign}`);
@@ -606,31 +629,75 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
           style={{ fontSize, transform: mirrorState ? "scaleX(-1)" : undefined, paddingBottom: bottomPadPx }}
         >
           {useMemo(() => {
-            // Render text preserving whitespace, wrapping word-like chunks for highlighting and anchoring
+            // Windowed rendering: render the whole string, but only wrap spans
+            // (with refs and highlight styles) around the words near the anchor.
             const parts = text.split(/(\s+)/);
-            let wordIdx = 0;
-            // Reset word element refs array size on render
-            wordElsRef.current = new Array(totalWords).fill(null);
+            // Compute dynamic window around current highlight
             const aheadWords = Math.max(0, totalWords - highlightWords);
             const baseWindow = Math.max(20, Math.round((viewportWords || 0) * 0.5));
             const shrinkNearEnd = Math.max(0, Math.round(aheadWords * 0.5));
             const windowSpan = Math.max(10, Math.min(baseWindow, shrinkNearEnd));
-            const startIdx = Math.max(0, highlightWords - windowSpan);
-            return parts.map((part, i) => {
+            const startWord = Math.max(0, highlightWords - windowSpan);
+            const endWord = Math.min(totalWords, highlightWords + windowSpan);
+
+            // Determine character boundaries for the mid window [startWord, endWord)
+            let wordCounter = 0;
+            let charLo = 0;
+            let charHi = text.length;
+            let acc = 0;
+            for (let i = 0; i < parts.length; i++) {
+              const part = parts[i];
               const isWs = /^\s+$/.test(part);
-              if (isWs) return <span key={i}>{part}</span>;
-              wordIdx += 1;
-              const seen = wordIdx > startIdx && wordIdx <= highlightWords;
-              return (
-                <span
-                  key={i}
-                  ref={(el) => { wordElsRef.current[wordIdx - 1] = el; }}
-                  className={seen ? "text-emerald-300" : undefined}
-                >
-                  {part}
-                </span>
-              );
-            });
+              if (!isWs) {
+                const nextWordIdx = wordCounter;
+                if (nextWordIdx === startWord) charLo = acc;
+                wordCounter++;
+                if (wordCounter === endWord) { charHi = acc + part.length; break; }
+              }
+              acc += part.length;
+            }
+            // Reset refs array for this render
+            wordElsRef.current = new Array(totalWords).fill(null);
+
+            const topStr = text.slice(0, charLo);
+            const midStr = text.slice(charLo, charHi);
+            const botStr = text.slice(charHi);
+
+            // Render mid window with spans for words to enable refs and highlight
+            const midNodes = (() => {
+              const chunks = midStr.split(/(\s+)/);
+              let gWordIdx = startWord; // global word index for this window
+              const nodes: React.ReactNode[] = [];
+              for (let i = 0; i < chunks.length; i++) {
+                const part = chunks[i];
+                const isWs = /^\s+$/.test(part);
+                if (isWs) {
+                  nodes.push(<span key={`ws-${i}`}>{part}</span>);
+                } else if (part.length > 0) {
+                  const idx = gWordIdx; // 0-based global word index
+                  gWordIdx += 1;
+                  const seen = idx > startWord && idx < highlightWords;
+                  nodes.push(
+                    <span
+                      key={`w-${i}`}
+                      ref={(el) => { wordElsRef.current[idx] = el; }}
+                      className={seen ? "text-emerald-300" : undefined}
+                    >
+                      {part}
+                    </span>
+                  );
+                }
+              }
+              return nodes;
+            })();
+
+            return (
+              <>
+                {topStr}
+                {midNodes}
+                {botStr}
+              </>
+            );
           }, [text, highlightWords, totalWords, viewportWords])}
         </div>
         </div>

@@ -65,31 +65,14 @@ export function rtfToText(rtf: string) {
   // Remove lines that are only punctuation artifacts (e.g., ;;;;;; from styles)
   const lines = s.split(/\n/).map(l => l.replace(/\s+$/,'')).filter(l => !/^[;:.,'`~_*\-]{3,}\s*$/.test(l));
 
-  // Reflow soft-wrapped lines into paragraphs: join single-newline separated lines,
-  // while preserving explicit paragraph breaks (blank lines), bullets, and SHOUTY headings.
-  const out: string[] = [];
-  let buf: string[] = [];
-  const isBlank = (l: string) => l.trim() === '';
-  const isBullet = (l: string) => /^\s*([\-*•‣◦·]|\d+\.)\s+/.test(l);
-  const isShouty = (l: string) => {
-    const letters = l.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]+/g, '');
-    if (!letters) return false;
-    return letters === letters.toUpperCase() && letters !== letters.toLowerCase() && l.trim().length <= 60;
-  };
-  const flush = () => {
-    if (buf.length) {
-      out.push(buf.join(' '));
-      buf = [];
-    }
-  };
-  for (const l of lines) {
-    if (isBlank(l)) { flush(); out.push(''); continue; }
-    if (isBullet(l) || isShouty(l)) { flush(); out.push(l.trim()); out.push(''); continue; }
-    buf.push(l.trim());
-  }
-  flush();
-  // Collapse extra blank lines
-  const finalText = out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/,'').replace(/^\s+/,'');
+  // Preserve newlines between lines to avoid collapsing paragraphs.
+  // Only trim trailing spaces and collapse runs of 3+ blank lines.
+  const finalText = lines
+    .map(l => l.trimEnd())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s+$/,'')
+    .replace(/^\s+/, '');
   return finalText;
 }
 

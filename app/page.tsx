@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Teleprompter from "@/components/Teleprompter";
 import FileTextInput from "@/components/FileTextInput";
+import SaveScriptDialog from "@/components/SaveScriptDialog";
 import { messages, normalizeUILang } from "@/lib/i18n";
 import { toast } from "@/lib/toast";
+import { useSettings } from "@/hooks/useSettings";
 
 type SampleTexts = { it?: string; en?: string; fr?: string; nl?: string };
 type ScriptState = { mode: "custom" } | { mode: "sample"; sampleLang: "it"|"en"|"fr"|"nl" };
@@ -12,23 +14,7 @@ export default function Home() {
   const [lang, setLang] = useState<string>("it-IT");
   const [loaded, setLoaded] = useState(false);
   const [scriptState, setScriptState] = useState<ScriptState>({ mode: "custom" });
-  const [settings, setSettings] = useState({
-    fontSizePx: 32,
-    mirror: false,
-    baseWpm: 140,
-    holdOnSilence: true,
-    manualPauseMs: 500,
-    useMicWhileASR: true,
-    useAsrDerivedDrift: false,
-    asrWindowScreens: 1 as 1|2|4,
-    asrSnapMode: "aggressive" as "gentle"|"aggressive"|"instant"|"sticky",
-    stickyThresholdPx: 16,
-    asrLeadWords: 2,
-    lockToHighlight: false,
-    showDebug: false,
-    theme: "light" as "light"|"dark"|"sepia"|"contrast",
-    fontFamily: "sans" as "sans"|"serif",
-  });
+  const { settings, update: updateSettings } = useSettings();
   const [samples, setSamples] = useState<SampleTexts>({});
   const [text, setText] = useState("");
   const setCustomText = (t: string) => {
@@ -57,15 +43,20 @@ export default function Home() {
     } catch {}
     setScriptState({ mode: "custom" });
   };
-  const saveScript = () => {
-    const title = prompt("Title for this script?");
-    if (!title) return;
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const openSaveDialog = () => setShowSaveDialog(true);
+  const closeSaveDialog = () => setShowSaveDialog(false);
+  const onConfirmSave = (title: string) => {
     try {
       const raw = localStorage.getItem("tp:scripts");
       const arr = raw ? JSON.parse(raw) : [];
-      arr.push({ id: Date.now(), title, text });
+      const id = (globalThis.crypto && 'randomUUID' in globalThis.crypto)
+        ? (globalThis.crypto as Crypto).randomUUID()
+        : String(Date.now());
+      arr.push({ id, title, text });
       localStorage.setItem("tp:scripts", JSON.stringify(arr));
       toast(ui.savedNotice, "success");
+      setShowSaveDialog(false);
     } catch (err) {
       console.error("Failed to save script", err);
       toast("Failed to save script", "error");
@@ -94,15 +85,6 @@ export default function Home() {
       setLang(l);
     } catch (err) {
       console.error("Failed to load language", err);
-    }
-    try {
-      const raw = localStorage.getItem("tp:settings");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setSettings((s) => ({ ...s, ...parsed }));
-      }
-    } catch (err) {
-      console.error("Failed to load settings", err);
     }
     try {
       const cur = localStorage.getItem("tp:currentScript");
@@ -143,7 +125,7 @@ export default function Home() {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("tp:langchange", onCustom as EventListener);
     };
-  }, []);
+  }, [updateSettings]);
   const ui = messages[normalizeUILang(lang)];
   useEffect(() => {
     // If in sample mode, keep sample coupled to the UI language
@@ -160,7 +142,7 @@ export default function Home() {
       if (!text && samples[norm]) apply(samples[norm]!);
     }
   }, [lang, scriptState, samples, fetchSample, text]);
-  // Persist settings and language
+  // Persist language
   useEffect(() => {
     if (!loaded) return;
     try {
@@ -172,23 +154,9 @@ export default function Home() {
   }, [lang, loaded]);
   useEffect(() => {
     if (!loaded) return;
-    try { localStorage.setItem("tp:settings", JSON.stringify(settings)); } catch (err) {
-      console.error("Failed to save settings", err);
-    }
-  }, [settings, loaded]);
-  useEffect(() => {
-    if (!loaded) return;
     try { localStorage.setItem("tp:currentScript", text); } catch {}
   }, [text, loaded]);
 
-  useEffect(() => {
-    const themes = ["theme-light","theme-dark","theme-sepia","theme-contrast"];
-    document.body.classList.remove(...themes);
-    document.body.classList.add(`theme-${settings.theme}`);
-    const fonts = ["font-sans","font-serif"];
-    document.body.classList.remove(...fonts);
-    document.body.classList.add(`font-${settings.fontFamily}`);
-  }, [settings.theme, settings.fontFamily]);
 
   // Keyboard shortcuts at page level: m (mirror), +/- (font size)
   useEffect(() => {
@@ -203,18 +171,18 @@ export default function Home() {
       if (isTypingTarget(document.activeElement)) return;
       if (e.key.toLowerCase() === "m") {
         e.preventDefault();
-        setSettings((s) => ({ ...s, mirror: !s.mirror }));
+        updateSettings((s) => ({ mirror: !s.mirror }));
       } else if (e.key === "+" || (e.key === "=" && e.shiftKey)) {
         e.preventDefault();
-        setSettings((s) => ({ ...s, fontSizePx: clamp((s.fontSizePx ?? 32) + 2) }));
+        updateSettings((s) => ({ fontSizePx: clamp((s.fontSizePx ?? 32) + 2) }));
       } else if (e.key === "-") {
         e.preventDefault();
-        setSettings((s) => ({ ...s, fontSizePx: clamp((s.fontSizePx ?? 32) - 2) }));
+        updateSettings((s) => ({ fontSizePx: clamp((s.fontSizePx ?? 32) - 2) }));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [updateSettings]);
   return (
     <div className="space-y-5">
       <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
@@ -249,7 +217,7 @@ export default function Home() {
         )}
         <button
           className="btn btn-secondary w-full sm:w-auto"
-          onClick={saveScript}
+          onClick={openSaveDialog}
           type="button"
         >
           {ui.saveLabel}
@@ -290,6 +258,20 @@ export default function Home() {
           </div>
         </div>
       )}
+      {/* Save dialog */}
+      <SaveScriptDialog
+        lang={lang}
+        open={showSaveDialog}
+        onClose={closeSaveDialog}
+        initialTitle={deriveDefaultTitle(text)}
+        onConfirm={onConfirmSave}
+      />
     </div>
   );
+}
+
+function deriveDefaultTitle(text: string) {
+  const firstNonEmpty = text.split(/\r?\n/).map((s) => s.trim()).find((s) => s.length > 0) || "";
+  const t = firstNonEmpty || "Untitled";
+  return t.length > 80 ? t.slice(0, 77) + "…" : t;
 }

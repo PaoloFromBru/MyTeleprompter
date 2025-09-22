@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import ThemeToggle from "./ThemeToggle";
 import { usePathname } from "next/navigation";
 import { messages, normalizeUILang } from "@/lib/i18n";
+import Dialog from "@/components/ui/Dialog";
 
 export default function TopNav() {
   const [open, setOpen] = useState(false);
@@ -12,7 +13,6 @@ export default function TopNav() {
   const toggle = () => setOpen((o) => !o);
   const pathname = usePathname();
   const linkClass = (path: string) => `btn btn-nav text-sm ${pathname === path ? "btn-nav-active" : ""}`;
-  const overlayRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -32,22 +32,7 @@ export default function TopNav() {
       window.removeEventListener("tp:langchange", onCustom as EventListener);
     };
   }, []);
-  useEffect(() => {
-    if (!open) return;
-    const root = overlayRef.current;
-    if (!root) return;
-    const focusables = root.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    first?.focus();
-    const trap = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || focusables.length === 0) return;
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
-    };
-    root.addEventListener('keydown', trap as unknown as EventListener);
-    return () => root.removeEventListener('keydown', trap as unknown as EventListener);
-  }, [open]);
+  // Focus trap handled by Dialog
   return (
     <header className="sticky top-0 z-40">
       <div className="bg-white/70 dark:bg-neutral-950/60 backdrop-blur supports-[backdrop-filter]:bg-white/50 border-b">
@@ -85,33 +70,31 @@ export default function TopNav() {
           </div>
         </nav>
       </div>
-      {open && (
-        <div
-          ref={overlayRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="mobile-menu-title"
-          className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center text-xl text-white space-y-6"
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        labelledById="mobile-menu-title"
+        overlayClassName="fixed inset-0 z-50 bg-black/80"
+        panelClassName="relative w-full h-full flex flex-col items-center justify-center text-xl text-white space-y-6"
+      >
+        <h2 id="mobile-menu-title" className="sr-only">Menu</h2>
+        <button
+          onClick={toggle}
+          aria-label="Close menu"
+          className="absolute top-5 right-5 p-2 rounded hover:bg-white/10"
+          type="button"
         >
-          <h2 id="mobile-menu-title" className="sr-only">Menu</h2>
-          <button
-            onClick={toggle}
-            aria-label="Close menu"
-            className="absolute top-5 right-5 p-2 rounded hover:bg-white/10"
-            type="button"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-          <Link className={`hover:underline ${pathname === "/" ? "underline font-medium" : ""}`} href="/" onClick={() => setOpen(false)}>{ui.navHome}</Link>
-          <Link className={`hover:underline ${pathname === "/settings" ? "underline font-medium" : ""}`} href="/settings" onClick={() => setOpen(false)}>{ui.navSettings}</Link>
-          <Link className={`hover:underline ${pathname === "/help" ? "underline font-medium" : ""}`} href="/help" onClick={() => setOpen(false)}>{ui.navHelp}</Link>
-          <Link className={`hover:underline ${pathname === "/about" ? "underline font-medium" : ""}`} href="/about" onClick={() => setOpen(false)}>{ui.navAbout}</Link>
-          <Link className={`hover:underline ${pathname === "/library" ? "underline font-medium" : ""}`} href="/library" onClick={() => setOpen(false)}>{ui.navLibrary}</Link>
-        </div>
-      )}
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+        <Link className={`hover:underline ${pathname === "/" ? "underline font-medium" : ""}`} href="/" onClick={() => setOpen(false)}>{ui.navHome}</Link>
+        <Link className={`hover:underline ${pathname === "/settings" ? "underline font-medium" : ""}`} href="/settings" onClick={() => setOpen(false)}>{ui.navSettings}</Link>
+        <Link className={`hover:underline ${pathname === "/help" ? "underline font-medium" : ""}`} href="/help" onClick={() => setOpen(false)}>{ui.navHelp}</Link>
+        <Link className={`hover:underline ${pathname === "/about" ? "underline font-medium" : ""}`} href="/about" onClick={() => setOpen(false)}>{ui.navAbout}</Link>
+        <Link className={`hover:underline ${pathname === "/library" ? "underline font-medium" : ""}`} href="/library" onClick={() => setOpen(false)}>{ui.navLibrary}</Link>
+      </Dialog>
     </header>
   );
 }

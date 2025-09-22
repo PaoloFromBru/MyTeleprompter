@@ -36,6 +36,7 @@ export const messages: Record<UILang, {
   saveLabel: string;
   detachSampleLabel: string;
   savedNotice: string;
+  saveTitleLabel: string;
   settingsTitle: string;
   settingsIntro: string;
   fontSizeLabel: string;
@@ -120,6 +121,7 @@ export const messages: Record<UILang, {
     saveLabel: "Save",
     detachSampleLabel: "Detach sample",
     savedNotice: "Saved",
+    saveTitleLabel: "Title",
     settingsTitle: "Settings",
     settingsIntro: "Personalize reading, mic behavior, and ASR follow. Changes save locally.",
     fontSizeLabel: "Font size",
@@ -204,6 +206,7 @@ export const messages: Record<UILang, {
     saveLabel: "Enregistrer",
     detachSampleLabel: "Détacher l’exemple",
     savedNotice: "Enregistré",
+    saveTitleLabel: "Titre",
     settingsTitle: "Paramètres",
     settingsIntro: "Personnalisez la lecture, le micro et le suivi ASR. Les changements sont enregistrés localement.",
     fontSizeLabel: "Taille de police",
@@ -288,6 +291,7 @@ export const messages: Record<UILang, {
     saveLabel: "Opslaan",
     detachSampleLabel: "Loskoppelen voorbeeld",
     savedNotice: "Opgeslagen",
+    saveTitleLabel: "Titel",
     settingsTitle: "Instellingen",
     settingsIntro: "Personaliseer lezen, microfoongedrag en ASR-volgen. Wijzigingen worden lokaal opgeslagen.",
     fontSizeLabel: "Lettergrootte",
@@ -372,6 +376,7 @@ export const messages: Record<UILang, {
     saveLabel: "Salva",
     detachSampleLabel: "Scollega demo",
     savedNotice: "Salvato",
+    saveTitleLabel: "Titolo",
     settingsTitle: "Impostazioni",
     settingsIntro: "Personalizza lettura, comportamento del microfono e follow ASR. Le modifiche vengono salvate localmente.",
     fontSizeLabel: "Dimensione font",

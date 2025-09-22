@@ -349,6 +349,13 @@ export function useTeleprompterLoop(opts: {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [
+    // Stable refs
+    containerRef,
+    contentRef,
+    wordElsRef,
+    caretRef,
+    boundaryCaretRef,
+    manualScrollUntilRef,
     pxPerWord,
     totalWords,
     baseWpm,

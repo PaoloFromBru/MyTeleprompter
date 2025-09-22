@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Script = { id: number; title: string; text: string };
+type Script = { id: string; title: string; text: string };
 
 export default function LibraryPage() {
   const [scripts, setScripts] = useState<Script[]>([]);
@@ -10,7 +10,12 @@ export default function LibraryPage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem("tp:scripts");
-      if (raw) setScripts(JSON.parse(raw));
+      if (raw) {
+        const arr = JSON.parse(raw) as Array<{ id: string | number; title: string; text: string }>;
+        // Normalize ids to string
+        const norm = arr.map((s) => ({ id: String(s.id), title: s.title, text: s.text }));
+        setScripts(norm);
+      }
     } catch {}
   }, []);
   const load = (s: Script) => {
@@ -20,7 +25,7 @@ export default function LibraryPage() {
     } catch {}
     router.push("/");
   };
-  const remove = (id: number) => {
+  const remove = (id: string) => {
     const next = scripts.filter((s) => s.id !== id);
     setScripts(next);
     try { localStorage.setItem("tp:scripts", JSON.stringify(next)); } catch {}

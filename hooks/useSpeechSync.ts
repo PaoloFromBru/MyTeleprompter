@@ -46,7 +46,8 @@ function findSequence(tokens: string[], seq: string[], start: number, end: numbe
   return -1;
 }
 
-function findFuzzySequence(tokens: string[], seq: string[], start: number, end: number, minRatio: number) {
+// Legacy positional fuzzy match: same-length alignment, ratio of exact token matches
+function findFuzzySequencePositional(tokens: string[], seq: string[], start: number, end: number, minRatio: number) {
   const n = tokens.length, m = seq.length;
   if (m === 0) return -1;
   const lo = Math.max(0, start);
@@ -67,9 +68,52 @@ function findFuzzySequence(tokens: string[], seq: string[], start: number, end: 
   return bestRatio >= minRatio ? bestIdx : -1;
 }
 
-export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boolean; windowRadius?: number; }) {
-  const { text, lang = "it-IT", enabled = false, windowRadius = 400 } = opts;
+// Dice coefficient over token bigrams for better tolerance to insertions/deletions
+function findFuzzySequenceDice(tokens: string[], textBigrams: string[], seq: string[], start: number, end: number, minDice: number) {
+  const n = tokens.length, m = seq.length;
+  if (m < 2) return -1; // need at least one bigram
+  const lo = Math.max(0, start);
+  const hi = Math.min(n - m, end - m);
+  // Seq bigrams set
+  const seqBigrams: string[] = [];
+  for (let i = 0; i < m - 1; i++) seqBigrams.push(seq[i] + "|" + seq[i + 1]);
+  const seqSet = new Set(seqBigrams);
+  const seqLen = seqSet.size;
+  let bestIdx = -1;
+  let bestScore = 0;
+  for (let i = lo; i <= hi; i++) {
+    const candStart = i; // bigrams from i..i+m-2 correspond to tokens slice
+    const candEnd = i + m - 2;
+    if (candStart < 0 || candEnd >= textBigrams.length + 1) {
+      // guard though bounds are already clamped by hi
+    }
+    let inter = 0;
+    let candCount = 0;
+    for (let k = candStart; k <= candEnd - 1; k++) {
+      const bg = textBigrams[k];
+      if (!bg) continue;
+      candCount++;
+      if (seqSet.has(bg)) inter++;
+    }
+    const denom = seqLen + candCount;
+    const dice = denom > 0 ? (2 * inter) / denom : 0;
+    if (dice > bestScore) {
+      bestScore = dice;
+      bestIdx = i + m - 1;
+      if (dice >= 1) break;
+    }
+  }
+  return bestScore >= minDice ? bestIdx : -1;
+}
+
+export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boolean; windowRadius?: number; fuzzyMethod?: "dice" | "pos"; fuzzyMinScore?: number; }) {
+  const { text, lang = "it-IT", enabled = false, windowRadius = 400, fuzzyMethod = "dice", fuzzyMinScore = 0.6 } = opts;
   const textTokens = useMemo(() => tokenize(text), [text]);
+  const textBigrams = useMemo(() => {
+    const arr: string[] = [];
+    for (let i = 0; i < textTokens.length - 1; i++) arr.push(textTokens[i] + "|" + textTokens[i + 1]);
+    return arr;
+  }, [textTokens]);
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [lastTranscript, setLastTranscript] = useState("");
@@ -123,11 +167,17 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
         const seq = bufferRef.current.slice(-n);
         // Prefer exact match; otherwise fuzzy with 0.6 similarity
         let idx = findSequence(textTokens, seq, windowStart, windowEnd);
-        if (idx < 0) idx = findFuzzySequence(textTokens, seq, windowStart, windowEnd, 0.6);
+        if (idx < 0) {
+          if (fuzzyMethod === "dice") idx = findFuzzySequenceDice(textTokens, textBigrams, seq, windowStart, windowEnd, fuzzyMinScore);
+          else idx = findFuzzySequencePositional(textTokens, seq, windowStart, windowEnd, fuzzyMinScore);
+        }
         // If we never matched yet, fall back to a global search to acquire lock anywhere
         if (idx < 0 && !hadAnyMatchRef.current) {
           idx = findSequence(textTokens, seq, 0, textTokens.length);
-          if (idx < 0) idx = findFuzzySequence(textTokens, seq, 0, textTokens.length, 0.6);
+          if (idx < 0) {
+            if (fuzzyMethod === "dice") idx = findFuzzySequenceDice(textTokens, textBigrams, seq, 0, textTokens.length, fuzzyMinScore);
+            else idx = findFuzzySequencePositional(textTokens, seq, 0, textTokens.length, fuzzyMinScore);
+          }
         }
         if (idx >= 0) {
           matched = true;
@@ -169,7 +219,7 @@ export function useSpeechSync(opts: { text: string; lang?: string; enabled?: boo
     try { rec.start(); } catch (err) {
       console.error("Failed to start speech recognition", err);
     }
-  }, [enabled, lang, textTokens, windowRadius]);
+  }, [enabled, lang, textTokens, textBigrams, windowRadius, fuzzyMethod, fuzzyMinScore]);
 
   const stop = useCallback(() => {
     const rec = recRef.current;

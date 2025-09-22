@@ -1,5 +1,6 @@
 "use client";
-import React, { useEffect, useRef } from "react";
+import React from "react";
+import Dialog from "@/components/ui/Dialog";
 
 type UIStrings = {
   settingsTitle: string;
@@ -25,31 +26,8 @@ type Props = {
 };
 
 export default function QuickSettingsDialog({ ui, open, onClose, fontSize, setFontSize, mirrorState, setMirrorState, baseWpmState, setBaseWpmState, asrEnabled, setAsrEnabled }: Props) {
-  const panelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const root = panelRef.current?.parentElement ?? null;
-    if (!root) return;
-    const focusables = root.querySelectorAll<HTMLElement>('button:not([disabled]), input, select');
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    first?.focus();
-    const trap = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key !== 'Tab' || focusables.length === 0) return;
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
-    };
-    root.addEventListener('keydown', trap as unknown as EventListener);
-    return () => root.removeEventListener('keydown', trap as unknown as EventListener);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="mobile-quick-settings-title">
-      <div ref={panelRef} className="card text-white p-4 w-11/12 max-w-sm space-y-3 bg-neutral-900/80">
+    <Dialog open={open} onClose={onClose} labelledById="mobile-quick-settings-title" overlayClassName="fixed inset-0 z-50 bg-black/75 flex items-center justify-center" panelClassName="card text-white p-4 w-11/12 max-w-sm space-y-3 bg-neutral-900/80">
         <h2 id="mobile-quick-settings-title" className="text-base font-medium">{ui.settingsTitle}</h2>
         <label className="flex items-center gap-2">
           <span className="whitespace-nowrap">{ui.fontSizeLabel}</span>
@@ -71,7 +49,6 @@ export default function QuickSettingsDialog({ ui, open, onClose, fontSize, setFo
         <div className="text-right pt-2">
           <button className="btn btn-primary" onClick={onClose}>{ui.helpCloseLabel}</button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
