@@ -30,6 +30,12 @@ import ToolbarDesktop from "./teleprompter/ToolbarDesktop";
 import QuickSettingsDialog from "./teleprompter/QuickSettingsDialog";
 import { useTeleprompterLoop } from "@/hooks/useTeleprompterLoop";
 
+const isPromiseLike = (value: unknown): value is Promise<void> => {
+  if (typeof value !== "object" || value === null) return false;
+  const maybeCatch = (value as { catch?: unknown }).catch;
+  return typeof maybeCatch === "function";
+};
+
 export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true, lang, fontSizePx, mirror = false, manualPauseMs = 500, useMicWhileASR = true, useAsrDerivedDrift = false, asrWindowScreens: pAsrWindowScreens, asrSnapMode: pAsrSnapMode, stickyThresholdPx: pStickyThresholdPx, asrLeadWords: pAsrLeadWords, lockToHighlight: pLockToHighlight, showDebug: pShowDebug }: Props) {
   const { start, stop, listening, permission, wpm, talking } = useMicSpeechRate({
     smoothingSecs: 1.6, minDbThreshold: -52, ema: 0.25,
@@ -195,11 +201,8 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
     if (supportsFullscreen && typeof cont.requestFullscreen === "function") {
       try {
         const maybePromise = cont.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
-        const promiseLike = (typeof maybePromise === "object" && maybePromise !== null && "catch" in (maybePromise as Record<string, unknown>))
-          ? maybePromise as Promise<void>
-          : null;
-        if (promiseLike) {
-          promiseLike.catch((err) => {
+        if (isPromiseLike(maybePromise)) {
+          maybePromise.catch((err) => {
             console.error("Failed to enter fullscreen", err);
             setFocusMode(true);
           });
