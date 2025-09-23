@@ -181,39 +181,43 @@ export function useTeleprompterLoop(opts: {
       let pendingBoundaryLeft: number | null = null;
 
       if (!manualMode && speechIdxRef.current != null) {
+        const contNode = containerRef.current;
+        const contentNode = contentRef.current;
+        const approxViewportWords = contNode ? (contNode.clientHeight / Math.max(1, pxPerWord)) : 0;
         const matchedWord = Math.min(totalWords, Math.round((speechIdxRef.current + 1) * tokenToWordRatio));
-        const asrTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
-        anchorWordsForHighlight = Math.round(asrTargetWords);
-        const diff = asrTargetWords - wordsReadRef.current;
+        const rawTargetWords = Math.min(totalWords, matchedWord + asrLeadWords);
+        const currentWords = wordsReadRef.current;
+        const maxForwardJump = Math.max(16, approxViewportWords > 0 ? approxViewportWords * 1.2 : 0);
+        const targetWords = Math.max(currentWords, Math.min(currentWords + maxForwardJump, rawTargetWords));
+        anchorWordsForHighlight = Math.round(targetWords);
+        const diff = targetWords - currentWords;
         if (diff > 0.1) {
           if (asrSnapMode === "aggressive") {
-            wordsReadRef.current = asrTargetWords;
+            wordsReadRef.current = targetWords;
             integratorRef.current = 0;
-            const cont2 = containerRef.current, content2 = contentRef.current;
-            if (cont2 && content2) {
+            if (contNode && contentNode) {
               const idx = Math.max(0, Math.min(totalWords - 1, Math.round(wordsReadRef.current) - 1));
               const el = wordElsRef.current[idx];
               if (el) {
                 overrideTarget = Math.max(0,
                   Math.min(
-                    content2.scrollHeight - cont2.clientHeight,
-                    el.offsetTop - cont2.clientHeight * anchorRatio
+                    contentNode.scrollHeight - contNode.clientHeight,
+                    el.offsetTop - contNode.clientHeight * anchorRatio
                   )
                 );
               }
             }
           } else if (asrSnapMode === "instant") {
-            wordsReadRef.current = asrTargetWords;
+            wordsReadRef.current = targetWords;
             integratorRef.current = 0;
-            const cont2 = containerRef.current, content2 = contentRef.current;
-            if (cont2 && content2) {
-              const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+            if (contNode && contentNode) {
+              const idx = Math.max(0, Math.min(totalWords - 1, Math.round(targetWords) - 1));
               const el = wordElsRef.current[idx];
               if (el) {
                 const target = Math.max(0,
                   Math.min(
-                    content2.scrollHeight - cont2.clientHeight,
-                    el.offsetTop - cont2.clientHeight * anchorRatio
+                    contentNode.scrollHeight - contNode.clientHeight,
+                    el.offsetTop - contNode.clientHeight * anchorRatio
                   )
                 );
                 overrideTarget = target;
@@ -221,54 +225,48 @@ export function useTeleprompterLoop(opts: {
             }
           } else {
             wordsReadRef.current += Math.max(0, diff * 0.6);
-            const cont2 = containerRef.current, content2 = contentRef.current;
-            if (cont2 && content2) {
-              const idx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+            if (contNode && contentNode) {
+              const idx = Math.max(0, Math.min(totalWords - 1, Math.round(targetWords) - 1));
               const el = wordElsRef.current[idx];
               if (el) {
                 overrideTarget = Math.max(0,
                   Math.min(
-                    content2.scrollHeight - cont2.clientHeight,
-                    el.offsetTop - cont2.clientHeight * anchorRatio
+                    contentNode.scrollHeight - contNode.clientHeight,
+                    el.offsetTop - contNode.clientHeight * anchorRatio
                   )
                 );
               }
             }
           }
-        } else if (diff < -1.0) {
-          const backStep = Math.min(2, Math.abs(diff)) * 0.7;
-          wordsReadRef.current = Math.max(0, asrTargetWords + backStep);
-          overrideTarget = null;
         }
         // Caret positions and pixel anchor for ASR target
-        const cont3 = containerRef.current;
         const caret = caretRef.current;
         const boundaryCaret = boundaryCaretRef.current;
-        const idxForPx = Math.max(0, Math.min(totalWords - 1, Math.round(asrTargetWords) - 1));
+        const idxForPx = Math.max(0, Math.min(totalWords - 1, Math.round(targetWords) - 1));
         const elForPx = wordElsRef.current[idxForPx];
-        if (cont3 && elForPx && caret && lastCaretWordIdxRef.current !== idxForPx) {
-          const contRect = cont3.getBoundingClientRect();
+        if (contNode && elForPx && caret && lastCaretWordIdxRef.current !== idxForPx) {
+          const contRect = contNode.getBoundingClientRect();
           const elRect = elForPx.getBoundingClientRect();
           const left = (elRect.left - contRect.left) + elRect.width / 2;
           pendingCaretLeft = Math.round(left);
         }
-        if (cont3 && boundaryCaret && highlightWordsRef.current > 0) {
+        if (contNode && boundaryCaret && highlightWordsRef.current > 0) {
           const bIdx = Math.min(totalWords - 1, Math.max(0, highlightWordsRef.current - 1));
           if (lastBoundaryCaretIdxRef.current !== bIdx) {
             const bel = wordElsRef.current[bIdx];
             if (bel) {
-              const contRect = cont3.getBoundingClientRect();
+              const contRect = contNode.getBoundingClientRect();
               const bRect = bel.getBoundingClientRect();
               const bLeft = (bRect.left - contRect.left) + bRect.width / 2;
               pendingBoundaryLeft = Math.round(bLeft);
             }
           }
         }
-        if (cont3 && elForPx) {
+        if (contNode && elForPx) {
           const pixelAnchor = Math.max(0,
             Math.min(
-              cont3.scrollHeight - cont3.clientHeight,
-              elForPx.offsetTop - cont3.clientHeight * anchorRatio
+              contNode.scrollHeight - contNode.clientHeight,
+              elForPx.offsetTop - contNode.clientHeight * anchorRatio
             )
           );
           if (overrideTarget == null) overrideTarget = pixelAnchor;
