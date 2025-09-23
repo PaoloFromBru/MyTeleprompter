@@ -183,7 +183,7 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   const toggleFullscreen = useCallback(() => {
     const cont = containerRef.current;
     if (!cont) return;
-    // If already in any full view, exit
+
     if (document.fullscreenElement || focusMode) {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch((err) => console.error("Failed to exit fullscreen", err));
@@ -191,11 +191,26 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
       setFocusMode(false);
       return;
     }
-    // Enter full view: prefer native fullscreen when supported
-    if (supportsFullscreen) {
+
+    if (supportsFullscreen && typeof cont.requestFullscreen === "function") {
       try {
-        cont.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions).catch(() => setFocusMode(true));
-      } catch {
+        const maybePromise = cont.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
+        const promiseLike = (typeof maybePromise === "object" && maybePromise !== null && "catch" in (maybePromise as Record<string, unknown>))
+          ? maybePromise as Promise<void>
+          : null;
+        if (promiseLike) {
+          promiseLike.catch((err) => {
+            console.error("Failed to enter fullscreen", err);
+            setFocusMode(true);
+          });
+        } else {
+          // Older Safari on iOS reports support but never enters fullscreen; fall back to focus mode.
+          window.setTimeout(() => {
+            if (!document.fullscreenElement) setFocusMode(true);
+          }, 200);
+        }
+      } catch (err) {
+        console.error("Failed to request fullscreen", err);
         setFocusMode(true);
       }
     } else {
@@ -213,9 +228,17 @@ export default function Teleprompter({ text, baseWpm = 140, holdOnSilence = true
   // Detect fullscreen support (iOS Safari lacks it)
   useEffect(() => {
     try {
+      const nav = typeof navigator !== "undefined" ? navigator : undefined;
+      const ua = nav?.userAgent ?? "";
+      const isiOS = /\b(iPad|iPhone|iPod)\b/i.test(ua);
+      if (isiOS) {
+        setSupportsFullscreen(false);
+        return;
+      }
       const el = document.documentElement as unknown as { requestFullscreen?: unknown };
       const docWithFlag = document as Document & { fullscreenEnabled?: boolean };
-      const supported = Boolean(docWithFlag.fullscreenEnabled) || typeof el.requestFullscreen === 'function';
+      const webkitFlag = (document as unknown as { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled;
+      const supported = Boolean(docWithFlag.fullscreenEnabled || webkitFlag) || typeof el.requestFullscreen === "function";
       setSupportsFullscreen(supported);
     } catch {
       setSupportsFullscreen(false);

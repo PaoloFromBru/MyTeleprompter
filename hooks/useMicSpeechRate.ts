@@ -68,6 +68,14 @@ export function useMicSpeechRate(opts?: {
       const audioCtx = new AudioCtor();
       audioCtxRef.current = audioCtx;
 
+      if (audioCtx.state === "suspended") {
+        try {
+          await audioCtx.resume();
+        } catch (err) {
+          console.warn("Audio context resume failed", err);
+        }
+      }
+
       const src = audioCtx.createMediaStreamSource(stream);
 
       const bandpass = audioCtx.createBiquadFilter();
@@ -179,6 +187,35 @@ export function useMicSpeechRate(opts?: {
   }, []);
 
   useEffect(() => () => stop(), [stop]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState === "hidden") {
+        stop();
+      }
+    };
+    const handlePageHide = () => { stop(); };
+    const handleBeforeUnload = () => { stop(); };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibility);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", handlePageHide);
+      window.addEventListener("beforeunload", handleBeforeUnload);
+    }
+
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pagehide", handlePageHide);
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+      }
+    };
+  }, [stop]);
 
   return { permission, listening, start, stop, wpm, talking, noiseFloor };
 }
