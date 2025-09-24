@@ -38,7 +38,7 @@ type Props = {
 
 export default function ToolbarMobile({ ui, permission, start, stop, listening, isClient, micSupported, reset, toggleFullscreen, nudgeBack, nudgeForward, asrSupported, asrEnabled, setAsrEnabled, recentAsr, wpm, onOpenSettings, manualMode, setManualMode }: Props) {
   return (
-    <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-900/90 backdrop-blur border-t border-white/10 text-white flex items-center justify-between gap-2 p-2">
+    <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-neutral-900/90 backdrop-blur border-t border-white/10 text-white flex flex-wrap items-center justify-between gap-2 p-2 pb-[calc(env(safe-area-inset-bottom,0)+0.25rem)]">
       <div className="flex items-center gap-1">
         <button
           onClick={permission !== "granted" ? start : (listening ? stop : start)}

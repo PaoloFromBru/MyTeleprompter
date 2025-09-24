@@ -54,6 +54,8 @@ export function useTeleprompterLoop(opts: {
   const lastBoundaryCaretIdxRef = useRef<number | null>(null);
   const settleUntilRef = useRef(0);
   const lastPxPerWordRef = useRef(pxPerWord);
+  // Monotonic progress floor to prevent backward movement in auto/ASR
+  const progressFloorRef = useRef(0);
 
   // Debug refs
   const lastTargetPxRef = useRef(0);
@@ -76,7 +78,11 @@ export function useTeleprompterLoop(opts: {
 
   // Entering manual mode: short settle to let anchor/caret sync without sweeping highlight
   useEffect(() => {
-    if (manualMode) settleUntilRef.current = performance.now() + 200;
+    if (manualMode) {
+      settleUntilRef.current = performance.now() + 200;
+      // Allow user to reposition when entering manual: set the floor to current position
+      progressFloorRef.current = Math.max(0, Math.round(wordsReadRef.current));
+    }
   }, [manualMode]);
 
   // Accept ASR matches within a tolerant window around current anchor
@@ -119,9 +125,10 @@ export function useTeleprompterLoop(opts: {
     const cont = containerRef.current, content = contentRef.current;
     if (!cont || !content) return;
     const targetWords = (cont.scrollTop + cont.clientHeight * anchorRatio) / Math.max(1, pxPerWord);
-    wordsReadRef.current = Math.max(0, Math.min(totalWords, targetWords));
+    const unclamped = Math.max(0, Math.min(totalWords, targetWords));
+    wordsReadRef.current = manualMode ? unclamped : Math.max(progressFloorRef.current, unclamped);
     integratorRef.current = 0;
-  }, [pxPerWord, totalWords, containerRef, contentRef, anchorRatio]);
+  }, [pxPerWord, totalWords, containerRef, contentRef, anchorRatio, manualMode]);
 
   // Main animation frame loop
   useEffect(() => {
@@ -157,7 +164,10 @@ export function useTeleprompterLoop(opts: {
           next = ans + 1; // 1-based word count at/above anchor
         }
       }
-      wordsReadRef.current = Math.max(0, Math.min(totalWords, next));
+      {
+        const unclamped = Math.max(0, Math.min(totalWords, next));
+        wordsReadRef.current = manualMode ? unclamped : Math.max(progressFloorRef.current, unclamped);
+      }
 
       // Accept current ASR match again (in case of geometry changes during the frame)
       const contA = containerRef.current;
@@ -274,9 +284,10 @@ export function useTeleprompterLoop(opts: {
       }
 
       // Align highlight to anchor when ASR drives
-      const desiredHighlight = (!manualMode && asrEnabled && anchorWordsForHighlight != null)
+      const desiredHighlightRaw = (!manualMode && asrEnabled && anchorWordsForHighlight != null)
         ? anchorWordsForHighlight
         : Math.round(wordsReadRef.current);
+      const desiredHighlight = manualMode ? desiredHighlightRaw : Math.max(progressFloorRef.current, desiredHighlightRaw);
       const candidate = Math.max(0, Math.min(totalWords, desiredHighlight));
       const nowTs = performance.now();
       const settle = manualMode && nowTs < settleUntilRef.current && nowTs > 0 && nowTs >= 0 && !(manualScrollUntilRef.current > nowTs);
@@ -341,6 +352,10 @@ export function useTeleprompterLoop(opts: {
         }
       }
 
+      // Update progress floor once we’ve advanced (only in auto/ASR)
+      if (!manualMode) {
+        progressFloorRef.current = Math.max(progressFloorRef.current, Math.round(wordsReadRef.current));
+      }
       raf = requestAnimationFrame(tick);
     };
 
